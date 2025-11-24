@@ -2,8 +2,6 @@
 const API_URL = "http://localhost:5000";
 
 
-
-
 import axios from "axios";
 //import jwt from "jsonwebtoken";
 
