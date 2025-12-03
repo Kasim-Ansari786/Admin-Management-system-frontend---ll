@@ -27,80 +27,45 @@ import {
 } from "lucide-react";
 
 import { toast } from "sonner"; 
-// Assuming you have an API to fetch player details and a new one for coaches
-// NOTE: Ensure your API file defines GetCoachDetailslist and AddNewPlayerDetails
-// NOTE: GetCoachDetailslist is no longer used, but kept in import for consistency with API structure.
 import { AddNewPlayerDetails } from "../../../api"; 
-
-// --- START: Initial State ---
-
 const initialFormData = {
-  // Personal Details
   name: "", father_name: "", mother_name: "", gender: "", date_of_birth: "", age: "",
   blood_group: "", phone_no: "", email_id: "", address: "",
-  // Guardian & Emergency Details
   emergency_contact_number: "", guardian_contact_number: "", guardian_email_id: "",
-  // Medical is now here
   medical_condition: "",
-  
-  // File Upload Paths (these hold File objects)
   aadhar_upload_path: null, birth_certificate_path: null, profile_photo_path: null,
 };
 
 const bloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
-// CATEGORIES constant removed as it's no longer used.
 
-// --- END: Initial State ---
-
-/**
- * Calculates the age in years from a date string (YYYY-MM-DD format).
- * @param {string} dateString - The date of birth in YYYY-MM-DD format.
- * @returns {string} The calculated age as a string, or an empty string if the date is invalid.
- */
 const calculateAge = (dateString) => {
     if (!dateString) return "";
 
     const birthDate = new Date(dateString);
     const today = new Date();
-
-    // Check for invalid date
     if (isNaN(birthDate)) return ""; 
-
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
-
-    // Adjust age if the birthday hasn't occurred yet this year
     if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
         age--;
     }
-    
-    // Return age as a string
-    return age > 0 ? String(age) : "";
+     
+    // Ensure the return value is a string, which is correct for form inputs
+    return age >= 0 ? String(age) : "";
 };
 
 
 const AddPlayerForm = () => {
   const [formData, setFormData] = useState(initialFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // State to help reset file inputs after submission
-  const [fileInputKey, setFileInputKey] = useState(Date.now());
-  
-  // 2. Initialize useNavigate hook
+  const [fileInputKey, setFileInputKey] = useState(Date.now());  
   const navigate = useNavigate();
-
-  // useEffect for fetching coaches is removed as coach_name is deleted.
-
-
   const handleSignOut = () => {
     console.log("User signed out!");
-    // You would typically call navigate('/login') or similar here
   };
 
   const handleChange = (e) => {
     const { id, value, type, checked, files } = e.target;
-
-    // Logic to enforce 10-digit numbers and prevent non-numeric input
     if (
       id === "phone_no" ||
       id === "emergency_contact_number" ||
@@ -123,21 +88,18 @@ const AddPlayerForm = () => {
   const handleSelectChange = (id, value) => {
     setFormData((prev) => {
         let newState = { ...prev, [id]: value };
-        
-        // AGE CALCULATION LOGIC: If Date of Birth changes, auto-calculate age
         if (id === "date_of_birth") {
             const age = calculateAge(value);
-            newState.age = age; // Update age in the form data
-        }
-        
+            // FIX: Ensure age is a string for the state
+            newState.age = age; 
+        }        
         return newState;
     });
   };
   
-  // Function to fully reset the form and file inputs
+ 
   const resetForm = useCallback(() => {
-      setFormData(initialFormData);
-      // Change the key to force a re-render and reset of file input elements
+      setFormData(initialFormData);      
       setFileInputKey(Date.now()); 
   }, []);
 
@@ -145,7 +107,6 @@ const AddPlayerForm = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Frontend validation for required 10-digit numbers
     if (formData.phone_no.length !== 10 || formData.emergency_contact_number.length !== 10) {
         toast.error("Phone Number and Emergency Contact No. must be exactly 10 digits.", { 
             duration: 5000, 
@@ -155,33 +116,24 @@ const AddPlayerForm = () => {
         return;
     }
 
-    // 1. Create FormData object
     const formDataToSend = new FormData();
-    
-    // Iterate through all keys and append them
     Object.keys(formData).forEach(key => {
         const value = formData[key];
         
         if (value instanceof File) {
-             // Appends the file to the FormData object
+             // Append file with its original name
              formDataToSend.append(key, value, value.name); 
         } 
-        else if (value !== null && value !== undefined && key !== "age") {
-             // NOTE: 'active' and other removed fields are not present in initialFormData.
-             // We skip appending the 'age' field directly as it's auto-calculated.
-             // If age is needed by the backend, remove 'key !== "age"' condition.
-             formDataToSend.append(key, String(value));
-        }
-        else if (key === "age" && value !== "") {
-             // Append age if it's calculated
+        // Append all other non-file fields that are not null/undefined
+        // The server will handle conversion of 'age' to a number or null
+        else if (value !== null && value !== undefined) {
              formDataToSend.append(key, String(value));
         }
     });
     
-    // --- API Call Integration ---
     try {
-         const response = await AddNewPlayerDetails(formDataToSend); 
-        
+         // This call will now work if the server has 'pool' imported and 'cpUpload' configured
+         const response = await AddNewPlayerDetails(formDataToSend);         
         toast.success(
             `Player added successfully! ${response.message || ''}`, 
             { 
@@ -189,19 +141,15 @@ const AddPlayerForm = () => {
                 style: { backgroundColor: '#E8F5E9', color: '#1B5E20', borderColor: '#4CAF50' }
             }
         );
-        
-        // Reset the form and file inputs
         resetForm(); 
-        
-        // 3. Navigation after successful submission
         setTimeout(() => {
-             navigate('/staff'); // Navigate to the /staff route
-        }, 100); // Small delay to allow the toast to show briefly
+             navigate('/staff'); 
+        }, 100); 
         
 
     } catch (error) {
-        console.error("Submission failed", error);
-        
+        console.error("Submission failed", error);        
+        // Improved error message extraction
         const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || "Failed to add player. Check console for details.";
         toast.error(
             errorMessage, 
@@ -220,10 +168,8 @@ const AddPlayerForm = () => {
     resetForm();
   };
 
-  const renderInputField = (id, label, type = "text", placeholder = "", maxLength = null, disabled = false) => {
-      // Use handleSelectChange for date_of_birth to trigger age calculation
-      const isDateOfBirth = id === "date_of_birth"; 
-      
+  const renderInputField = (id, label, type = "text", placeholder = "", maxLength = null, disabled = false) => { 
+      const isDateOfBirth = id === "date_of_birth";       
       return (
           <div className="space-y-2">
             <Label htmlFor={id}>{label}</Label>
@@ -231,7 +177,6 @@ const AddPlayerForm = () => {
               id={id}
               type={type}
               placeholder={placeholder}
-              // Age and date of birth are handled by handleSelectChange
               value={formData[id] || ""} 
               onChange={isDateOfBirth ? (e) => handleSelectChange(id, e.target.value) : handleChange} 
               maxLength={maxLength}
@@ -244,9 +189,8 @@ const AddPlayerForm = () => {
   const renderFileInput = (id, label) => (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      {/* File Input Key: Use the key prop to force reset the input field in the DOM */}
       <Input
-        key={id + fileInputKey} // Unique key ensures re-render on fileInputKey change
+        key={id + fileInputKey} 
         id={id}
         type="file"
         onChange={handleChange}
@@ -257,7 +201,6 @@ const AddPlayerForm = () => {
                    file:bg-primary file:text-primary-foreground
                    hover:file:bg-primary/90"
       />
-      {/* Display selected file name */}
       {formData[id] && formData[id] instanceof File ? (
         <p className="text-xs text-muted-foreground mt-1 text-center font-medium text-green-600">
           Selected File: {formData[id].name}
@@ -293,13 +236,11 @@ const AddPlayerForm = () => {
         </Button>
       </div>
 
-      {/* 2. Stats Cards (omitted for brevity) */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {/* ... Stat Cards Code ... */}
+     
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">       
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* === Personal Details === */}
+      <form onSubmit={handleSubmit} className="space-y-6">     
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle>Personal Information</CardTitle>
@@ -354,23 +295,19 @@ const AddPlayerForm = () => {
             </div>
           </CardContent>
         </Card>
-
-        {/* === Guardian & Emergency (Medical Added) === */}
+     
         <Card className="shadow-lg">
           <CardHeader><CardTitle>Guardian, Emergency Contact & Medical</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {renderInputField("father_name", "Father's Name", "text", "E.g., John Smith")}
-            {renderInputField("mother_name", "Mother's Name", "text", "E.g., Jane Smith")}
-
-            {/* Emergency Contacts Row */}
+            {renderInputField("mother_name", "Mother's Name", "text", "E.g., Jane Smith")}       
             <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
               {renderInputField("emergency_contact_number", "Emergency Contact No. *", "tel", "10-digit emergency number", 10)}
               {renderInputField("guardian_contact_number", "Guardian Contact No.", "tel", "Optional 10-digit number", 10)}
               
               {renderInputField("guardian_email_id", "Guardian Email ID", "email", "E.g., guardian@email.com")}
-            </div>
+            </div>           
             
-            {/* Medical Condition Field (Moved Here) */}
             <div className="md:col-span-3 space-y-2">
               <Label htmlFor="medical_condition">Medical Condition/Notes</Label>
               <Textarea
@@ -382,8 +319,7 @@ const AddPlayerForm = () => {
             </div>
           </CardContent>
         </Card>
-
-        {/* === Document Uploads === */}
+       
         <div className="p-6">
           <Card className="shadow-lg">
             <CardHeader><CardTitle>Document Uploads</CardTitle></CardHeader>
@@ -394,8 +330,7 @@ const AddPlayerForm = () => {
             </CardContent>
           </Card>
         </div>
-
-        {/* === Actions === */}
+       
         <div className="flex justify-end space-x-4 pt-4">
           <Button type="button" variant="outline" onClick={handleCancel} disabled={isSubmitting}><XCircle className="h-4 w-4 mr-2" />Cancel & Clear</Button>
           <Button type="submit" disabled={isSubmitting}>

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-// Import useNavigate and useParams from react-router-dom
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +10,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { GetPlayerEditDetails, updateplayersedit } from "../../../api"; 
+
+// Assume your API is running here. Replace this with your actual environment variable.
+// In a typical React setup, this would be process.env.VITE_API_BASE_URL or similar.
+const API_BASE_URL = "http://localhost:5000"; 
+
 
 // Placeholder for a toast notification utility (replace with your actual toast implementation)
 const toast = ({ title, description, variant }) => {
@@ -36,16 +40,31 @@ const initialFormData = {
   guardian_contact_number: "",
   guardian_email_id: "",
   medical_condition: "",
-  aadhar_upload_path: "",
-  birth_certificate_path:
-    "",
-  profile_photo_path:
-    "",
+  // Paths are initially empty strings
+  aadhar_upload_path: "", 
+  birth_certificate_path: "",
+  profile_photo_path: "",
   phone_no: "",
 };
 
 const showToast = (message, isSuccess) => {
   console.log(`${isSuccess ? "SUCCESS" : "ERROR"}: ${message}`);
+};
+
+
+// FIX: Helper function to construct the full image URL
+const getFullImagePath = (relativePath) => {
+    if (!relativePath) return ""; // Return empty string if no path is available
+    // Check if the path is already a full URL (e.g., if it starts with 'http' or 'https')
+    if (relativePath.startsWith('http') || relativePath.startsWith('https')) {
+        return relativePath;
+    }
+    // Prepend the base URL for relative paths like /uploads/filename.jpg
+    // We use a slight hack to handle trailing/leading slashes to prevent // in the path
+    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const relative = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+    
+    return baseUrl + relative;
 };
 
 
@@ -80,41 +99,33 @@ export default function PlayerEditor() {
 
   const handleCancel = () => {
     resetForm();
-    // Only need one navigation call
     navigate("/staff"); 
   };
 
   // Corrected function to accept and use IDs
   const fetchPlayerData = async (id, player_id) => {
-    // Check if IDs are available before fetching
     if (!id || !player_id) {
         setError("Player or Academy ID is missing. Cannot fetch data.");
-        setIsLoading(false); // Ensure loading is stopped
+        setIsLoading(false); 
         return;
     }
 
     setIsLoading(true);
     setError(null);
     try {
-      // **FIX**: Call the API with the required IDs (id and player_id)
       const data = await GetPlayerEditDetails(id, player_id); 
       
-      // Assuming the API returns a single player object for editing
       setFormData({
-          ...initialFormData, // Ensure defaults are maintained for fields not returned by API
+          ...initialFormData, 
           ...data,
           // Handle Date of Birth formatting if necessary. Assuming API returns 'YYYY-MM-DD'
-          // Ensure it's not null before calling split
           date_of_birth: data.date_of_birth?.split('T')[0] || ""
       }); 
 
-      // If you are fetching a single player to edit, the 'players' state might not be needed, 
-      // but if you intend to track the edited player in a list, you might do:
       setPlayers([data]); 
       
       showToast("Player details loaded successfully.", true);
     } catch (err) {
-      // Use the error details from the backend if available
       const errorMessage = err.response?.data?.error || "Failed to fetch player data.";
       setError(errorMessage);
       toast({
@@ -127,17 +138,13 @@ export default function PlayerEditor() {
     }
   };
 
-  // Added useEffect to fetch data on component mount
   useEffect(() => {
-    // Use IDs from URL parameters
     fetchPlayerData(academyId, playerId);
-  }, [academyId, playerId]); // Dependencies now correctly include the IDs
+  }, [academyId, playerId]); 
 
-  // **FIX**: Renamed and corrected function to handle player update via API
   const handleSubmitPlayer = async (e) => {
-    e.preventDefault(); // Prevent default form submission if wrapped in a form
+    e.preventDefault(); 
     
-    // An editor component's primary purpose is usually UPDATE, so we'll focus on that.
     if (!academyId || !playerId) {
         showToast("Missing Academy or Player ID for update.", false);
         return;
@@ -147,17 +154,14 @@ export default function PlayerEditor() {
     setError(null);
 
     try {
-      // Data to send to the API. The API likely needs the IDs to know *what* to update.
       const updateData = {
           academyId,
           playerId,
           ...formData,
-          // Ensure active is explicitly a boolean if the backend expects it
           active: !!formData.active 
       };
 
-      // **FIX**: Pass the academyId, playerId (for API path) AND the form data (for body).
-      await updateplayersedit(playerId, updateData); // Only playerId needed for the URL in the API route, and updateData for the body.
+      await updateplayersedit(playerId, updateData); 
 
       showToast("Player details updated successfully.", true);
       resetForm();
@@ -190,6 +194,11 @@ export default function PlayerEditor() {
       </div>
     );
   }
+  
+  // Define a placeholder image path for when no image is available
+  const PLACEHOLDER_IMAGE = "/placeholder-image.jpg"; 
+  // You might need to adjust this path or create a local placeholder image 
+  // if you want a visual indication when the path is empty.
 
   return (
     <div className="p-0 max-w-8xl mx-auto space-y-9">
@@ -203,7 +212,6 @@ export default function PlayerEditor() {
       </div>
 
       <Card className="p-4 shadow-xl rounded-2xl">
-        {/* **FIX**: Changed CardContent to be a form element for semantic correctness and easier submission handling */}
         <CardContent className="space-y-6">
           <h1 className="text-2xl font-bold text-center">Player Manager</h1>
 
@@ -254,21 +262,6 @@ export default function PlayerEditor() {
             </div>
 
             <div>
-              <Label>Category</Label>
-              <Input name="category" value={formData.category} onChange={handleInputChange} />
-            </div>
-
-            <div>
-              <Label>Center Name</Label>
-              <Input name="center_name" value={formData.center_name} onChange={handleInputChange} />
-            </div>
-
-            <div>
-              <Label>Coach Name</Label>
-              <Input name="coach_name" value={formData.coach_name} onChange={handleInputChange} />
-            </div>
-
-            <div>
               <Label>Status</Label>
               <Input name="status" value={formData.status} onChange={handleInputChange} />
             </div>
@@ -282,7 +275,7 @@ export default function PlayerEditor() {
               <input
                 type="checkbox"
                 name="active"
-                checked={formData.active}
+                checked={!!formData.active} // Ensure it's treated as a boolean for the checkbox
                 onChange={handleInputChange}
               />
               <Label>Active Player</Label>
@@ -319,7 +312,8 @@ export default function PlayerEditor() {
                 <Label className="text-base font-semibold">Aadhar Upload</Label>
                 <div className="border-2 border-border rounded-lg overflow-hidden bg-muted/20">
                   <img
-                    src={formData.aadhar_upload_path}
+                    // FIX: Use the helper function here
+                    src={getFullImagePath(formData.aadhar_upload_path) || PLACEHOLDER_IMAGE}
                     alt="Aadhar Document"
                     className="w-full h-64 object-cover"
                   />
@@ -330,7 +324,8 @@ export default function PlayerEditor() {
                 <Label className="text-base font-semibold">Birth Certificate</Label>
                 <div className="border-2 border-border rounded-lg overflow-hidden bg-muted/20">
                   <img
-                    src={formData.birth_certificate_path}
+                    // FIX: Use the helper function here
+                    src={getFullImagePath(formData.birth_certificate_path) || PLACEHOLDER_IMAGE}
                     alt="Birth Certificate"
                     className="w-full h-64 object-cover"
                   />
@@ -341,7 +336,8 @@ export default function PlayerEditor() {
                 <Label className="text-base font-semibold">Profile Photo</Label>
                 <div className="border-2 border-border rounded-lg overflow-hidden bg-muted/20">
                   <img
-                    src={formData.profile_photo_path}
+                    // FIX: Use the helper function here
+                    src={getFullImagePath(formData.profile_photo_path) || PLACEHOLDER_IMAGE}
                     alt="Profile Photo"
                     className="w-full h-64 object-cover"
                   />
@@ -352,7 +348,6 @@ export default function PlayerEditor() {
 
           <div className="flex justify-end gap-4 pt-4">
             <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-            {/* **FIX**: Use the new handler and explicitly label it for editing */}
             <Button onClick={handleSubmitPlayer} disabled={isLoading}>
                 {isLoading ? "Updating..." : "Update Player"}
             </Button>

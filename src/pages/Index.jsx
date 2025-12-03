@@ -28,7 +28,7 @@ const Index = () => {
 
   useEffect(() => {
     const checkOnboardingStatus = () => {
-      if (user && user.role === 'parent') {
+      if (user && user.role === '/auth') {
         // Check localStorage for onboarding completion
         const onboardingData = localStorage.getItem('dummyOnboarding');
         const completed = onboardingData ? JSON.parse(onboardingData)[user.id] : false;

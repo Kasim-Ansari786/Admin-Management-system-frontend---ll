@@ -6,13 +6,20 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import jwt from "jsonwebtoken";
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+
 
 const { Pool } = pg;
 
 const app = express();
 
+app.use(cors({
+    origin: 'http://localhost:8080', // Allow requests from your front-end port
+    credentials: true,
+}));
 
-const PORT = process.env.PORT || 5000;
 
 // ---------------------------------------------
 // DB CONNECTION
@@ -25,51 +32,8 @@ const pool = new Pool({
   port: 5432,
 });
 const JWT_SECRET = "SECRET_KEY";
-app.use(
-  cors({
-    origin: ["http://localhost:3000", "http://localhost:8080"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true,
-  })
-);
 
 app.use(express.json());
-
-// ---------------------------------------------
-// CREATE UPLOADS FOLDER (FIXED LOCATION)
-// ---------------------------------------------
-const UPLOAD_DIR = path.resolve("uploads"); // <-- UPLOAD_DIR DEFINED HERE
-
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  console.log("✔ Uploads folder created:", UPLOAD_DIR);
-}
-
-// ---------------------------------------------
-// SERVE STATIC UPLOADS (UPLOAD_DIR IS NOW READY)
-// ---------------------------------------------
-app.use("/uploads", express.static(UPLOAD_DIR));
-
-// ---------------------------------------------
-// MULTER STORAGE
-// ---------------------------------------------
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOAD_DIR);
-  },
-
-  filename: (req, file, cb) => {
-    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + "-" + unique + path.extname(file.originalname));
-  },
-});
-
-// These names must match your React formData keys EXACTLY
-const upload = multer({ storage }).fields([
-  { name: "profile_photo_path", maxCount: 1 },
-  { name: "aadhar_upload_path", maxCount: 1 },
-  { name: "birth_certificate_path", maxCount: 1 },
-]);
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -175,7 +139,7 @@ app.get("/api/players-details", async (req, res) => {
     const result = await pool.query(`
       SELECT id, player_id, name, age, address, phone_no, center_name, coach_name, category, status
       FROM cd.player_details 
-      ORDER BY id,player_id DESC;
+      ORDER BY id DESC;
     `);
 
     res.json(result.rows);
@@ -184,169 +148,137 @@ app.get("/api/players-details", async (req, res) => {
   }
 });
 
-// ---------------------------------------------
-// ADD PLAYER (FIXED)
-// ---------------------------------------------
-app.post("/api/players-add", (req, res) => {
-  upload(req, res, async (err) => {
-    if (err) {
-      console.log("❌ Multer upload error:", err);
-      return res.status(400).json({ error: "File upload failed" });
-    }
 
-    const filePath = (field) => {
-      if (req.files && req.files[field] && req.files[field].length > 0) {
-        return `/uploads/${req.files[field][0].filename}`; 
-      }
-      return null;
-    };
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-    const profile_photo_path = filePath("profile_photo_path");
-    const aadhar_upload_path = filePath("aadhar_upload_path");
-    const birth_certificate_path = filePath("birth_certificate_path");
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
 
-    const data = req.body;
+app.use("/uploads", express.static(UPLOAD_DIR));
 
-    const numericAge = Number(data.age) || null;
-
-    try {
-      const query = `
-        INSERT INTO cd.player_details (
-          name, age, address, father_name, mother_name, gender, 
-          date_of_birth, blood_group, email_id, emergency_contact_number, 
-          guardian_contact_number, guardian_email_id, medical_condition, 
-          aadhar_upload_path, birth_certificate_path, profile_photo_path, phone_no
-        ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17
-        )
-        RETURNING player_id, name; 
-      `;
-     
-      const result = await pool.query(query, [
-        data.name, 
-        numericAge, 
-        data.address, 
-        
-        data.father_name, 
-        data.mother_name, 
-        data.gender, 
-        data.date_of_birth, 
-        data.blood_group, 
-        data.email_id,
-        
-        data.emergency_contact_number, 
-        data.guardian_contact_number, 
-        data.guardian_email_id, 
-        
-        data.medical_condition,
-        
-        aadhar_upload_path, 
-        birth_certificate_path, 
-        profile_photo_path, 
-        
-        data.phone_no, 
-      ]);
-
-      res.status(201).json({
-        message: "Player added successfully",
-        player: result.rows[0],
-      });
-    } catch (error) {
-      console.error("❌ Database insert failed:", error.message, error.detail);
-
-      if (error.code === "23505") {
-        return res.status(409).json({
-          error: `A player with this email address already exists.`,
-          details: error.detail,
-        });
-      }
-      
-      res.status(500).json({
-        error: "Internal Server Error: Database insertion failed.",
-        details: error.message,
-      });
-    }
-  });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || "";
+    const safeBase = path.basename(file.originalname, ext).replace(/\s+/g, "_");
+    cb(null, `${Date.now()}_${safeBase}${ext}`);
+  },
 });
 
-//coach list by the add players coact name list
-app.post("/api/players-add", (req, res) => {
-  upload(req, res, async (err) => {
-    if (err) {
-      console.log("❌ Multer upload error:", err);
-      return res.status(400).json({ error: "File upload failed" });
-    }
 
-    // CORRECT: Logic to extract file paths saved in the 'uploads' folder
-    const filePath = (field) => {
-      if (req.files && req.files[field] && req.files[field].length > 0) {
-        return `/uploads/${req.files[field][0].filename}`; 
-      }
-      return null;
-    };
+const fileFilter = (req, file, cb) => {
+  const allowedMime = ["image/jpeg", "image/png", "image/webp", "image/jpg", "application/pdf"];
+  if (allowedMime.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Unsupported file type. Allowed: jpeg, jpg, png, webp, pdf"), false);
+  }
+};
 
-    const profile_photo_path = filePath("profile_photo_path");
-    const aadhar_upload_path = filePath("aadhar_upload_path");
-    const birth_certificate_path = filePath("birth_certificate_path");
-
-    const data = req.body;
-
-    const numericAge = Number(data.age) || null;
-
-    try {
-      const query = `
-        INSERT INTO cd.player_details (
-          name, age, address, father_name, mother_name, gender, 
-          date_of_birth, blood_group, email_id, emergency_contact_number, 
-          guardian_contact_number, guardian_email_id, medical_condition, 
-          aadhar_upload_path, birth_certificate_path, profile_photo_path, phone_no
-        ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17
-        )
-        RETURNING player_id, name; 
-      `;
-     
-      const result = await pool.query(query, [
-        data.name, 
-        numericAge, 
-        data.address, 
-        data.father_name, 
-        data.mother_name, 
-        data.gender, 
-        data.date_of_birth, 
-        data.blood_group, 
-        data.email_id,
-        data.emergency_contact_number, 
-        data.guardian_contact_number, 
-        data.guardian_email_id, 
-        data.medical_condition,
-        aadhar_upload_path, 
-        birth_certificate_path, 
-        profile_photo_path, 
-        data.phone_no, 
-      ]);
-
-      res.status(201).json({
-        message: "Player added successfully",
-        player: result.rows[0],
-      });
-    } catch (error) {
-      console.error("❌ Database insert failed:", error.message, error.detail);
-
-      if (error.code === "23505") {
-        return res.status(409).json({
-          error: `A player with this email address already exists.`,
-          details: error.detail,
-        });
-      }
-      
-      res.status(500).json({
-        error: "Internal Server Error: Database insertion failed.",
-        details: error.message,
-      });
-    }
-  });
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
+
+
+const cpUpload = upload.fields([
+  { name: "profile_photo_path", maxCount: 1 },
+  { name: "aadhar_upload_path", maxCount: 1 },
+  { name: "birth_certificate_path", maxCount: 1 },
+]);
+
+
+// --- API Route Definition (FIXED SQL to Single Line) ---
+app.post("/api/players-add", (req, res) => {
+    cpUpload(req, res, async (err) => { 
+        if (err) {
+            console.log("❌ Multer upload error:", err);
+            let errorMessage = "File upload failed";
+            if (err instanceof multer.MulterError) {
+                errorMessage = `Multer Error: ${err.code}`; 
+            } else if (err.message) {
+                errorMessage = err.message;
+            }
+            return res.status(400).json({ error: errorMessage });
+        }
+
+        const filePath = (field) => {
+            if (req.files && req.files[field] && req.files[field].length > 0) {
+                return `/uploads/${req.files[field][0].filename}`; 
+            }
+            return null;
+        };
+
+        const profile_photo_path = filePath("profile_photo_path");
+        const aadhar_upload_path = filePath("aadhar_upload_path");
+        const birth_certificate_path = filePath("birth_certificate_path");
+        
+        const data = req.body;
+        const numericAge = data.age === "" ? null : Number(data.age); 
+
+        try {
+            const query = `
+                INSERT INTO cd.player_details (
+                    name, age, address, father_name, mother_name, gender, 
+                    date_of_birth, blood_group, email_id, emergency_contact_number, 
+                    guardian_contact_number, guardian_email_id, medical_condition, 
+                    aadhar_upload_path, birth_certificate_path, profile_photo_path, phone_no
+                ) 
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) 
+                RETURNING player_id, name;
+            `.trim();
+            
+            console.log("DEBUG: Final Query String:", query);
+            
+            const result = await pool.query(query, [ 
+                data.name, 
+                numericAge, 
+                data.address,         
+                data.father_name, 
+                data.mother_name, 
+                data.gender, 
+                data.date_of_birth, 
+                data.blood_group, 
+                data.email_id,         
+                data.emergency_contact_number, 
+                data.guardian_contact_number, 
+                data.guardian_email_id,         
+                data.medical_condition,         
+                aadhar_upload_path, 
+                birth_certificate_path, 
+                profile_photo_path, 
+                data.phone_no, 
+            ]);
+
+            res.status(201).json({
+                message: "Player added successfully",
+                player: result.rows[0],
+            });
+        } catch (error) {
+            console.error("❌ Database insert failed:", error); 
+            const message = error.message || "An unknown database error occurred.";
+
+            if (error.code === "23505") { 
+                return res.status(409).json({
+                    error: `A player with this email address already exists.`,
+                    details: error.detail,
+                });
+            }         
+            res.status(500).json({
+                error: "Internal Server Error: Database insertion failed.",
+                details: message,
+            });
+        }
+    });
+});
+
+
 //---------------------------------------------
 //Edit the player details
 //---------------------------------------------
@@ -1265,26 +1197,35 @@ ORDER BY
 // Attendance Recording Endpoint
 // ---------------------------------------------
 app.post("/api/attendance", async (req, res) => {
-  const { playerId, attendanceDate, isPresent, coachId } = req.body;
+  const { playerId, attendanceDate, isPresent, coachId } = req.body; 
   if (!playerId || !attendanceDate || isPresent === undefined || !coachId) {
     return res.status(400).json({ error: "Missing required attendance data." });
   }
+
   const queryText = `
     INSERT INTO cd.attendance_sheet 
     (player_id, attendance_date, is_present, recorded_by_coach_id)
     VALUES($1, $2, $3, $4)
     RETURNING *;
   `;
-
-  const queryValues = [playerId, attendanceDate, isPresent, coachId];
+  const queryValues = [playerId, attendanceDate, isPresent, coachId];   
   try {
     const result = await pool.query(queryText, queryValues);
     res.status(201).json({
       message: "Attendance successfully recorded.",
       data: result.rows[0],
     });
+
   } catch (err) {
+
     console.error("Error executing query", err.stack);
+    if (err.code === '22P02') { 
+        return res.status(400).json({
+            error: "Data type mismatch: Coach ID must be a number.",
+            details: `Attempted value: ${coachId}`
+        });
+    }
+    
     res.status(500).json({
       error: "Failed to record attendance due to server error.",
       details: err.message,
@@ -1547,11 +1488,269 @@ app.put('/api/registrations/reject', async (req, res) => {
   }
 });
 
+// A. Route for Coach Data: /api/coachdata/:coachId
+app.get('/api/coachdata/:coachId', async (req, res) => {
+    try {
+        const { coachId } = req.params;
+        
+        // 🚨 POTENTIAL PROBLEM SPOT 🚨
+        // Ensure your table and column names are EXACTLY as they appear in the DB image.
+        // If your table is named 'coaches_details' and the column is 'coach_id' (lowercase with underscore)
+        const query = 'SELECT * FROM cd.coaches_details WHERE coach_id = $1'; 
+        
+        const { rows } = await pool.query(query, [coachId]); 
+
+        if (rows.length === 0) {
+            // This is the line that generates the 404 error.
+            return res.status(404).json({ error: `Coach ID ${coachId} not found.` }); 
+        }
+        
+        // Success: return the coach data
+        res.json(rows[0]);
+
+    } catch (error) {
+        console.error('Error fetching coach details:', error);
+        res.status(500).json({ error: 'Internal server error.' });
+    }
+});
+
+// B. Route for Players: /api/coachplayers/:coachId/players
+app.get('/api/coachplayers/:coachId/players', async (req, res) => {
+  const { coachId } = req.params;
+
+  try {
+    const query = `
+      SELECT 
+    p.player_id,
+    p.name,
+	p.age, p.category, p.active, 
+    ROUND(
+        (COUNT(a.attendance_id) FILTER (WHERE a.is_present = TRUE)::decimal 
+        / NULLIF(COUNT(a.attendance_id), 0)) * 100, 2
+    ) AS attendance_percentage
+FROM 
+    cd.player_details p
+LEFT JOIN 
+    cd.attendance_sheet a 
+ON 
+    p.player_id = a.player_id
+WHERE 
+    p.coach_id = $1      
+GROUP BY 
+    p.player_id, p.name
+ORDER BY 
+    p.name;
+    `;
+    const result = await pool.query(query, [coachId]);
+    // The response is an array of player objects, which is what the frontend expects.
+    res.json(result.rows); 
+
+  } catch (error) {
+    console.error('Error fetching coach players:', error);
+    res.status(500).send({ error: 'Internal Server Error (Coach Players)', details: error.message });
+  }
+});
+
+//show the all session query and code 
+app.get("/api/sessions-data/:coachId", async (req, res) => {
+  try {
+    const { coachId } = req.params;
+    const numericCoachId = parseInt(coachId, 10); // Ensure coachId is treated as a number
+    
+    if (isNaN(numericCoachId) || numericCoachId <= 0) {
+      return res.status(400).json({ message: "Invalid or missing coach ID parameter." });
+    }
+    
+    const queryText = `
+      SELECT 
+        session_id,
+        day_of_week,
+        start_time,
+        end_time,
+        group_category,
+        location,
+        status,
+        coach_id
+      FROM cd.training_sessions
+      WHERE coach_id = $1  
+      ORDER BY session_id DESC;
+    `;
+
+    // Pass the numeric coachId as a parameter to pool.query
+    const result = await pool.query(queryText, [numericCoachId]); // Use numeric value
+
+    // Check if any data was found for the coach
+    if (result.rows.length === 0) {
+      // Returning 200 with an empty array is also an option, but 404 is informative
+      return res.status(200).json([]); 
+    }
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Error fetching sessions:", error.message, error.stack);
+    // Explicitly check for the common 'relation does not exist' error in a real app
+    res.status(500).json({
+      error: "Internal Server Error during session fetch",
+      details: error.message,
+    });
+  }
+});
+
+//add the coach session insert the data in session coach 
+// Assuming 'app' is your Express app instance:
+app.post("/api/sessions-insert", async (req, res) => {
+  try {
+    let {
+      coach_id,
+      coach_name,
+      day_of_week,
+      start_time,
+      end_time,
+      group_category,
+      location,
+      status,
+      active,
+    } = req.body ?? {};
+
+    if (!coach_id || isNaN(Number(coach_id))) {
+      return res.status(400).json({ error: "Invalid or missing coach_id" });
+    }
+    coach_id = Number(coach_id);
+
+    if (!coach_name || typeof coach_name !== "string") {
+      return res.status(400).json({ error: "Invalid or missing coach_name" });
+    }
+
+    if (!day_of_week || typeof day_of_week !== "string") {
+      return res.status(400).json({ error: "Invalid or missing day_of_week" });
+    }
+
+    if (!start_time || !end_time) {
+      return res.status(400).json({ error: "start_time and end_time are required" });
+    }
+    status = typeof status === "string" && status.trim() !== "" ? status.trim() : "Upcoming";
+
+    if (active === undefined || active === null) {
+      active = true;
+    } else if (typeof active === "string") {
+      active = active.toLowerCase() === "true";
+    } else {
+      active = Boolean(active);
+    }
+
+    const queryText = `INSERT INTO cd.training_sessions (coach_id, coach_name, day_of_week, start_time, end_time, group_category, location, status, active) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *;`;
+
+    const values = [
+      coach_id,
+      coach_name,
+      day_of_week,
+      start_time,
+      end_time,
+      group_category ?? null,
+      location ?? null,
+      status,
+      active,
+    ];
+    
+    const { rows } = await pool.query(queryText, values); 
+
+    return res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error("Error adding new training session:", error);
+    return res.status(500).json({ error: "Internal Server Error", details: error.message });
+  }
+});
+
+//Update the coach session query 
+app.put("/api/sessions-updated/:session_id", async (req, res) => {
+  try {
+    const { session_id: sessionIdParam } = req.params;     
+    const session_id = parseInt(sessionIdParam, 10);     
+    if (isNaN(session_id) || session_id <= 0) {
+        console.error("Attempted update with invalid session ID format:", sessionIdParam);
+        return res.status(400).json({ error: "Invalid session ID format. ID must be a positive integer.", details: `Received ID: ${sessionIdParam}` });
+    }
+
+    const {
+      day_of_week,
+      start_time,
+      end_time,
+      group_category,
+      location,
+      status
+    } = req.body;
+
+    const queryText = `
+      UPDATE cd.training_sessions 
+      SET 
+        day_of_week = $1,
+        start_time = $2,
+        end_time = $3,
+        group_category = $4,
+        location = $5,
+        status = $6
+      WHERE session_id = $7
+      RETURNING *;
+    `;
+
+    const values = [
+      day_of_week,
+      start_time,
+      end_time,
+      group_category,
+      location,
+      status,
+      session_id, 
+    ];
+    const result = await pool.query(queryText, values);
+    
+    if (result.rowCount === 0) {
+        return res.status(404).json({ error: "Training session not found." });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Error updating session:", error);
+    res.status(500).json({ error: "Internal Server Error", details: error.message });
+  }
+});
+
+// Delete session route
+app.delete("/api/sessions/:session_id", async (req, res) => {
+  try {
+    const { session_id: sessionIdParam } = req.params;
+    console.log(`[${new Date().toISOString()}] DELETE /api/sessions/:session_id called. param=`, sessionIdParam);
+
+    const session_id = parseInt(sessionIdParam, 10);
+    if (isNaN(session_id) || session_id <= 0) {
+      console.error("Attempted delete with invalid session ID format:", sessionIdParam);
+      return res.status(400).json({ error: "Invalid session ID format. ID must be a positive integer." });
+    }
+
+    const queryText = `
+      DELETE FROM cd.training_sessions
+      WHERE session_id = $1;
+    `;
+    const values = [session_id];
+    const result = await pool.query(queryText, values);
+    if (result.rowCount === 0) {
+      console.warn(`Delete attempted but no rows affected for session_id ${session_id}`);
+      return res.status(404).json({ error: "Training session not found or already deleted." });
+    }
+    console.log(`Successfully deleted session ID: ${session_id}`);
+    return res.status(204).send();
+  } catch (error) {
+    console.error("Error deleting session:", error);
+    return res.status(500).json({ error: "Internal Server Error", details: error.message });
+  }
+});
+
+
 // ---------------------------------------------
 // START SERVER
 // ---------------------------------------------
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}.`);
-    console.log(`DB Host is: ${process.env.POR}`);
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
 

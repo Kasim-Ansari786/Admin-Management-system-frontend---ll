@@ -511,7 +511,7 @@ const handleDelete = async (id) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>📋 Registration Management</CardTitle>
+        <CardTitle>Registration Management</CardTitle>
       </CardHeader>
 
       <CardContent>
@@ -566,7 +566,7 @@ const handleDelete = async (id) => {
             disabled={registrations.length === 0 || isLoading}
           >
             <Download className="h-4 w-4 mr-2" />
-            Export Excel
+            Sample Excel
           </Button>
         </div>
 
@@ -630,7 +630,7 @@ const handleDelete = async (id) => {
                             }`}>
                                 {reg.Status}
                             </span>
-                        ) : 'N/A'}
+                        ) : 'Pending'}
                       </TableCell>
                       <TableCell className="text-right">
                         {/* The handleViewDetails function is now defined */}

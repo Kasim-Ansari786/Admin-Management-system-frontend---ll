@@ -12,7 +12,7 @@ import { Eye, EyeOff, User, LogIn as LogInIcon } from 'lucide-react';
 const LoginForm = ({ onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('auth'); // Default to 'coach' for this demo
+  const [role, setRole] = useState('/auth'); // Default to 'coach' for this demo
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // Local loading state for form submission
 

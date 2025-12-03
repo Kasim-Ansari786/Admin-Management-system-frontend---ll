@@ -22,23 +22,24 @@ import {
   UserCheck,
   Target,
 } from "lucide-react";
-import { fetchCoachAssignedPlayers, recordAttendance } from "../../../api";
+import { fetchCoachAssignedPlayers, recordAttendance, fetchSessionData } from "../../../api";
 
 const CoachDashboard = () => {
-  // 🔑 HOOKS MUST BE CALLED UNCONDITIONALLY AT THE TOP
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const { user, session, isLoading: isAuthLoading, logout } = useAuth();
+  // user object holds the coach's details (e.g., id, email)
+  const { user, session, isLoading: isAuthLoading, logout } = useAuth(); 
   const [assignedPlayers, setAssignedPlayers] = useState([]);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
+  const [schedule, setSchedule] = useState({ today: [], weekly: [] });
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true); 
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const [localAttendance, setLocalAttendance] = useState({});
   const navigate = useNavigate();
 
-  // Get the token securely from the session
   const token = session?.accessToken;
 
-  // --- HANDLERS ---
   const handleAttendanceChange = (playerId, status) => {
     setLocalAttendance((prev) => ({
       ...prev,
@@ -50,45 +51,44 @@ const CoachDashboard = () => {
     if (isSubmitting) return;
 
     setIsSubmitting(true);
-
-    const dateString = selectedDate.toISOString().split("T")[0];
+    const dateString = selectedDate.toISOString().split("T")[0];    
     
-    // Use user.email as the identifier for the coach in the attendance payload.
-    const coachId = user.email; 
+    // Ensure both ID and Token are available before submission
+    const coachIdToSend = user?.id; 
+    if (!coachIdToSend || !token) { 
+        toast({
+            title: "Error",
+            description: "Authentication missing. Please try signing out and back in.",
+            variant: "destructive", 
+        });
+        setIsSubmitting(false);
+        return;
+    }
 
     try {
       const submissionPromises = assignedPlayers.map((player) => {
-        // Determine status: 'present' maps to true, anything else maps to false
-        const isPresent =
-          localAttendance[player.id] === "present" ||
-          (localAttendance[player.id] === undefined && true); // Default to present if not touched
+        const isPresent = (localAttendance[player.id] || "present") === "present";
 
         const payload = {
           playerId: player.id,
           attendanceDate: dateString,
           isPresent: isPresent,
-          coachId: coachId,
+          coachId: coachIdToSend, // Using numeric ID (user.id)
         };
-
-        // Call the API for each player concurrently
-        return recordAttendance(payload);
+        
+        return recordAttendance(payload, token); 
       });
 
       const results = await Promise.all(submissionPromises);
       console.log("Batch submission complete:", results);
-
-      // 🥇 Success Feedback using toast
       toast({
         title: "Attendance Submitted",
         description: `Attendance recorded for ${results.length} players on ${dateString}.`,
         variant: "success", 
       });
 
-      // Optionally reset local attendance state after success
-      // setLocalAttendance({});
     } catch (error) {
       console.error("Attendance Submission Failed:", error);
-      // ❌ Error Feedback using toast
       toast({
         title: "Submission Failed",
         description: `Failed to submit attendance. Error: ${error.message.substring(
@@ -103,20 +103,17 @@ const CoachDashboard = () => {
   };
 
   const handleSignOut = () => {
-    // 1. Log out the user (clears session/token)
     logout();
-    // 2. Show success notification
     toast({
       title: "Signed Out",
       description:
         "You have been securely logged out and redirected to the login page.",
       variant: "success",
     });
-    // 3. Navigate to the /auth route
     navigate("/auth");
   };
 
-  // --- MEMOIZED VALUES ---
+  // Memoized calculation for average attendance
   const averageAttendance = useMemo(() => {
     if (!assignedPlayers || assignedPlayers.length === 0) return 0;
     const total = assignedPlayers.reduce((sum, p) => {
@@ -129,21 +126,14 @@ const CoachDashboard = () => {
     return Math.round(total / assignedPlayers.length);
   }, [assignedPlayers]);
 
-  // --- EFFECTS ---
+  // useEffect to fetch Assigned Players
   useEffect(() => {
-    if (isAuthLoading) {
+    // 💡 FIX 1: Ensure both user.id (or user.email) AND token are present before fetching.
+    if (isAuthLoading || !user || !token) { 
       setAssignedPlayers([]);
       setIsLoadingPlayers(false);
-      return;
-    }
-
-    // 🚩 FIX: Explicitly check for the token before proceeding.
-    // This prevents the API call if the token is null/undefined during auth initialization.
-    if (!user || !user.email || !token) { 
-      // If we don't have a token but auth is done, we might redirect later.
-      // For now, just exit the effect and clear the data.
-      setAssignedPlayers([]);
-      setIsLoadingPlayers(false);
+      // Log for debugging the Forbidden error
+      if (user && !token) console.warn("Cannot fetch players: Token is missing.");
       return;
     }
 
@@ -152,13 +142,21 @@ const CoachDashboard = () => {
     const fetchPlayers = async () => {
       setIsLoadingPlayers(true);
       try {
-        // We know 'token' is available here due to the check above
+        // fetchCoachAssignedPlayers relies only on the token in the API function
         const players = await fetchCoachAssignedPlayers(token); 
         if (!isMounted) return;
         setAssignedPlayers(players || []);
       } catch (error) {
         console.error("Dashboard failed to load players:", error);
         if (isMounted) setAssignedPlayers([]);
+        // Notify user about token issue
+        if (error.message.includes('Invalid Token') || error.message.includes('Forbidden')) {
+            toast({
+                title: "Authentication Error",
+                description: "Session expired or invalid token. Please sign out and sign back in.",
+                variant: "destructive"
+            });
+        }
       } finally {
         if (isMounted) setIsLoadingPlayers(false);
       }
@@ -169,44 +167,49 @@ const CoachDashboard = () => {
     return () => {
       isMounted = false;
     };
-  // Depend on token so the fetch runs as soon as it's loaded by useAuth
+  // Reruns when user or token changes
   }, [isAuthLoading, user, token]); 
-  // ----------------------------------------
 
-  // --- STATIC UI DATA ---
-  const todaysSchedule = [
-    {
-      time: "4:00 PM - 5:30 PM",
-      group: "U12 Beginners",
-      location: "Field A",
-      status: "Completed",
-    },
-    {
-      time: "5:30 PM - 7:00 PM",
-      group: "U13 Intermediate",
-      location: "Field A",
-      status: "Completed",
-    },
-    {
-      time: "7:00 PM - 8:30 PM",
-      group: "U14 Advanced",
-      location: "Field B",
-      status: "Upcoming",
-    },
-  ];
+  // useEffect to fetch Schedule Data
+  useEffect(() => {
+    // 💡 FIX 2: Check for user.id and token before proceeding.
+    // The previous error showed .../undefined, meaning user.id was likely missing initially.
+    if (!user?.id || !token) { 
+        setSchedule({ today: [], weekly: [] });
+        setIsLoadingSchedule(false);
+        return;
+    }
 
-  const weeklySchedule = [
-    { day: "Monday", sessions: ["4:00 PM - U12", "6:00 PM - U13"] },
-    { day: "Tuesday", sessions: ["4:00 PM - U11", "5:30 PM - U14"] },
-    { day: "Wednesday", sessions: ["4:00 PM - U12", "6:00 PM - U13"] },
-    { day: "Thursday", sessions: ["4:00 PM - U11", "5:30 PM - U14"] },
-    { day: "Friday", sessions: ["4:00 PM - U12", "6:00 PM - U13"] },
-    { day: "Saturday", sessions: ["10:00 AM - Match Day"] },
-    { day: "Sunday", sessions: ["Rest Day"] },
-  ];
-  // ----------------------------------------
+    let isMounted = true;
+    
+    const fetchSchedule = async () => {
+        setIsLoadingSchedule(true);
+        try {
+            // FIX 3: Ensure user.id (which holds the numeric coach ID) is passed to the API.
+            const data = await fetchSessionData(user.id, token); 
+            if (!isMounted) return;
 
-  // --- CONDITIONAL RENDERING ---
+            setSchedule({
+                today: data.todaysSchedule || [], 
+                weekly: data.weeklySchedule || []
+            });
+        } catch (error) {
+            console.error("Dashboard failed to load schedule:", error);
+            if (isMounted) setSchedule({ today: [], weekly: [] });
+        } finally {
+            if (isMounted) setIsLoadingSchedule(false);
+        }
+    };
+
+    fetchSchedule();
+
+    return () => {
+        isMounted = false;
+    };
+  }, [user, token]); 
+  
+  const { today: todaysSchedule, weekly: weeklySchedule } = schedule;
+
   if (isAuthLoading) {
     return (
       <div className="p-10 text-center">
@@ -216,13 +219,13 @@ const CoachDashboard = () => {
   }
 
   if (!user) {
+    // If user is null after loading, redirect to login
     return null;
   }
 
-  // --- MAIN RENDER ---
+
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="bg-gradient-primary rounded-xl p-6 text-primary-foreground flex justify-between items-start">
         <div className="flex-grow">
           <h1 className="text-2xl font-bold mb-2">Coach Dashboard</h1>
@@ -232,7 +235,6 @@ const CoachDashboard = () => {
           </p>
         </div>
 
-        {/* User details displayed on the right side */}
         <div className="ml-8 text-right self-center">
           <div className="mt-2 text-sm text-primary-foreground/70 space-y-1">
             <p>Email: {user?.email || "—"}</p>
@@ -240,7 +242,7 @@ const CoachDashboard = () => {
           </div>
         </div>
 
-        {/* Sign Out Button */}
+
         <Button
           variant="secondary"
           className="ml-7 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground"
@@ -251,7 +253,7 @@ const CoachDashboard = () => {
         </Button>
       </div>
 
-      {/* Stats Overview */}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="shadow-card">
           <CardContent className="p-4">
@@ -274,7 +276,9 @@ const CoachDashboard = () => {
             <div className="flex items-center gap-2">
               <CalendarIcon className="h-5 w-5 text-primary" />
               <div>
-                <p className="text-2xl font-bold">{todaysSchedule.length}</p>
+                <p className="text-2xl font-bold">
+                  {isLoadingSchedule ? "..." : todaysSchedule.length}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Today's Sessions
                 </p>
@@ -289,7 +293,7 @@ const CoachDashboard = () => {
               <CheckCircle className="h-5 w-5 text-success" />
               <div>
                 <p className="text-2xl font-bold">
-                  {
+                  {isLoadingSchedule ? "..." : 
                     todaysSchedule.filter((s) => s.status === "Completed")
                       .length
                   }
@@ -337,7 +341,6 @@ const CoachDashboard = () => {
                   Loading players...
                 </div>
               ) : assignedPlayers.length === 0 ? (
-                // Clarified the failure message to refer to the coach's email.
                 <div className="p-4 text-center text-muted-foreground">
                   No players assigned to coach {user.email} or failed to fetch.
                 </div>
@@ -410,30 +413,40 @@ const CoachDashboard = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {todaysSchedule.map((session, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 bg-muted rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium">{session.time}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {session.group} • {session.location}
-                        </p>
-                      </div>
-                      <Badge
-                        variant={
-                          session.status === "Completed"
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {session.status}
-                      </Badge>
+                {isLoadingSchedule ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                        Loading today's schedule...
                     </div>
-                  ))}
-                </div>
+                ) : todaysSchedule.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                        No sessions scheduled for today.
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                    {todaysSchedule.map((session, index) => (
+                        <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                        >
+                        <div>
+                            <p className="font-medium">{session.time}</p>
+                            <p className="text-sm text-muted-foreground">
+                            {session.group} • {session.location}
+                            </p>
+                        </div>
+                        <Badge
+                            variant={
+                            session.status === "Completed"
+                                ? "default"
+                                : "secondary"
+                            }
+                        >
+                            {session.status}
+                        </Badge>
+                        </div>
+                    ))}
+                    </div>
+                )}
               </CardContent>
             </Card>
 
@@ -446,18 +459,28 @@ const CoachDashboard = () => {
                 <CardDescription>Your weekly training schedule</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {weeklySchedule.map((day, index) => (
-                    <div key={index} className="border-l-2 border-primary pl-3">
-                      <p className="font-medium">{day.day}</p>
-                      <div className="text-sm text-muted-foreground">
-                        {day.sessions.map((session, sessionIndex) => (
-                          <p key={sessionIndex}>{session}</p>
-                        ))}
-                      </div>
+                {isLoadingSchedule ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                        Loading weekly schedule...
                     </div>
-                  ))}
-                </div>
+                ) : weeklySchedule.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                        No weekly schedule available.
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                    {weeklySchedule.map((day, index) => (
+                        <div key={index} className="border-l-2 border-primary pl-3">
+                        <p className="font-medium">{day.day}</p>
+                        <div className="text-sm text-muted-foreground">
+                            {day.sessions.map((session, sessionIndex) => (
+                            <p key={sessionIndex}>{session}</p>
+                            ))}
+                        </div>
+                        </div>
+                    ))}
+                    </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -465,7 +488,6 @@ const CoachDashboard = () => {
 
         <TabsContent value="attendance" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-6">
-            {/* ⚽ Mark Attendance Card */}
             <Card className="shadow-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -503,7 +525,7 @@ const CoachDashboard = () => {
                           {/* Display Current Status Text */}
                           <span
                             className={`font-medium min-w-[55px] text-right ${
-                              isPresent ? "text-success" : "text-destructive"
+                              isPresent ? "text-green-600" : "text-red-600"
                             }`}
                           >
                             {isPresent ? "Present" : "Absent"}
@@ -539,15 +561,12 @@ const CoachDashboard = () => {
                 <Button
                   className="w-full mt-4"
                   onClick={handleSubmitAttendance}
-                  disabled={isSubmitting} // Added disabled state for submission
+                  disabled={isSubmitting || assignedPlayers.length === 0}
                 >
                   {isSubmitting ? "Submitting..." : "Submit Attendance"}
                 </Button>
               </CardContent>
             </Card>
-            {/* --- End Mark Attendance Card --- */}
-
-            {/* 📅 Calendar Card (Marking Removed) */}
             <Card className="shadow-card">
               <CardHeader>
                 <CardTitle>Calendar</CardTitle>
@@ -560,15 +579,11 @@ const CoachDashboard = () => {
                   mode="single"
                   selected={selectedDate}
                   onSelect={setSelectedDate}
-                  className="rounded-md border"
-
-                  // Removed custom modifiers/classNames for scheduling marks
+                  className="rounded-md border"            
                 />
 
-                {/* Schedule Legend is also removed as the marking is gone */}
               </CardContent>
-            </Card>
-            {/* --- End Calendar Card --- */}
+            </Card>          
           </div>
         </TabsContent>
       </Tabs>

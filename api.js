@@ -1,5 +1,5 @@
 // api.js
-const API_URL = "http://localhost:5000";
+const API_URL = 'http://localhost:5000';
 
 
 import axios from "axios";
@@ -135,28 +135,22 @@ export const GetPlayerDetails = async () => {
 //add the new details of player to the database
 // 🌟 NO ERRORS FOUND - CODE IS CORRECT FOR HANDLING FormData WITH FILE UPLOADS 🌟
 export const AddNewPlayerDetails = async (formDataToSend) => {
-  try {
-    const response = await axios.post(
-      `${API_URL}/api/players-add`,
-      formDataToSend, // This MUST be a FormData object
-      {
-        withCredentials: true,
-        headers: {
-          // IMPORTANT: Do NOT manually set 'Content-Type' for FormData.
-          // Axios handles 'multipart/form-data' automatically.
-          ...getAuthHeaders(),
-        },
-      }
-    );
+  try {
+    const response = await axios.post(
+      `${API_URL}/api/players-add`,
+      formDataToSend, // This MUST be a FormData object
+      {
+        withCredentials: true,
+        headers: {
+        },
+      }
+    );
 
-    return response.data;
-  } catch (error) {
-    // Axios puts the server's error response data into error.response.data.
-    // This will contain the detailed error message from the server's 409 response.
-    console.error("Error adding new player:", error);
-    // Throw the error to be caught by the calling component (e.g., AddPlayers.jsx)
-    throw error;
-  }
+    return response.data;
+  } catch (error) {
+    console.error("Error adding new player:", error);
+    throw error;
+  }
 };
 
 //coach list show the assgin the coach and players
@@ -577,13 +571,12 @@ export const getPlayerDetailsByGuardianEmail = async (email, token) => {
     const response = await fetch(`${API_URL}/api/player-details/${email}`, {
       method: "GET",
       headers: {
-        "Content-Type": "application/json",
-        // CORRECTLY USES THE TOKEN in the Authorization header
+        "Content-Type": "application/json",       
         Authorization: `Bearer ${token}`,
       },
     });
 
-    // 3. Handle HTTP Errors (4xx, 5xx)
+  
     if (!response.ok) {
       let errorData = {};
       // Attempt to parse the error message from the response body
@@ -600,10 +593,8 @@ export const getPlayerDetailsByGuardianEmail = async (email, token) => {
       );
     }
 
-    // 4. Parse Successful Response
-    const playersArray = await response.json();
-
-    // 5. Safety Checks and Data Mapping
+   
+    const playersArray = await response.json(); 
     if (!Array.isArray(playersArray)) {
       console.warn(
         "API response is not an array. Returning empty list.",
@@ -611,8 +602,7 @@ export const getPlayerDetailsByGuardianEmail = async (email, token) => {
       );
       return [];
     }
-
-    // Map and transform the data structure for consistent use on the frontend
+ 
     return playersArray.map((childData) => ({
       player_id: childData.player_id,
       name: childData.name,
@@ -627,7 +617,6 @@ export const getPlayerDetailsByGuardianEmail = async (email, token) => {
       recent_activities_json: childData.recent_activities_json,
     }));
   } catch (err) {
-    // Re-throw the error to be caught by the calling function (e.g., loadData in ParentDashboard.jsx)
     console.error("Error fetching player details:", err.message);
     throw err;
   }
@@ -778,6 +767,131 @@ export const deleteRegistration = async (registId) => {
 
   } catch (error) {
     console.error(`Error rejecting registration ${registId}:`, error);
+    throw error;
+  }
+};
+
+// Assuming API_URL is defined
+export const getCoachDetails = async (coachId) => {
+  if (!coachId) return null;
+
+  try {
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    const url = `${API_URL}/api/coachdata/${coachId}`;
+
+    const response = await axios.get(url, {
+      headers,
+      withCredentials: true,
+    });
+
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      console.warn(`Coach ID ${coachId} not found (404).`);
+      return null;
+    }
+    console.error("Error fetching coach details:", error.message);
+    throw error;
+  }
+};
+
+export const getCoachPlayers = async (coachId) => {
+  if (!coachId) return [];
+  try {
+    const token = localStorage.getItem('token');
+    // Ensure this URL is correct: /api/coachplayers/:coachId/players
+    const response = await axios.get(`${API_URL}/api/coachplayers/${coachId}/players`, {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json',
+      },
+      withCredentials: true,
+    });
+
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (error) {
+    if (error.response) {
+       console.error("Error fetching coach players data:", error.response.data);
+    } else {
+       console.error("Network / unknown error fetching coach players:", error.message);
+    }
+    return [];
+  }
+};
+
+//fech the session data 
+export const fetchSessionData = async (coachId) => {
+  try {
+    const token = localStorage.getItem("token");
+    const response = await axios.get(`${API_URL}/api/sessions-data/${coachId}`, {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+      withCredentials: true,
+    });
+    const sessions = response.data;
+    console.log("Fetched session data:", sessions);
+    if (!Array.isArray(sessions)) {
+      console.warn("Data is not an array:", sessions);
+      return [];
+    }
+    return sessions;
+  } catch (error) {
+    console.error("Error fetching session data:", error);
+    return [];
+  }
+};
+
+// Function to insert a new training session via API
+export const insertSession = async (sessionData) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/api/sessions-insert`,
+      sessionData,
+      {
+        
+        headers: getAuthHeaders(), 
+        withCredentials: true,
+      }
+    );
+    
+    return response.data;
+    
+  } catch (error) {
+    console.error("Error inserting new session:", error); 
+    throw error;
+  }
+}; 
+
+//updated session API in coach washi edit the session
+export const updateSession = async (session_id, sessionData) => {
+  try {
+    const response = await axios.put(`${API_URL}/api/sessions-updated/${session_id}`, sessionData, {
+      headers: getAuthHeaders(),
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`Error updating session with id ${session_id}:`, error);
+    throw error;
+  }
+};
+
+//delete the session coach and API
+export const deleteSession = async (session_id) => {
+  try {
+    const response = await axios.delete(`${API_URL}/api/sessions/${session_id}`, {
+      headers: getAuthHeaders(),
+      withCredentials: true,
+    });
+    return response.status; 
+  } catch (error) {
+    console.error(`Error deleting session with id ${session_id}:`, error);
     throw error;
   }
 };

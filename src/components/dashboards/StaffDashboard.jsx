@@ -5,10 +5,10 @@ import * as XLSX from "xlsx"; // Import the xlsx library
 // New Import: Accesses the authentication context
 import { useAuth } from "@/contexts/AuthContext";
 import PendingRegistrations from "@/components/dashboards/PendingRegistrations";
-// 
+//
 // 🔥 FIX: Change import statement for 'file-saver' to use the default import.
 // Previous: import { saveAs } from "file-saver";
-//import saveAs from "file-saver"; 
+//import saveAs from "file-saver";
 //   "@/components/dashboards/AssignStudents"
 import {
   MapPin,
@@ -76,7 +76,7 @@ import {
   UpdateCoachdata,
   DeactivateCoachdata,
   fetchVenuesdetails,
-  GetregistrationsData,// Imported venue fetching function
+  GetregistrationsData, // Imported venue fetching function
   // New function for Excel upload  uploadRegistrations, // This is not needed if we use local fetch
 } from "../../../api";
 
@@ -156,9 +156,6 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
     setIsSaving(false); // Stop saving
     // The modal is closed by the parent component after onSave completes
   };
-
-
-
 
   const title = formData.coach_id ? "Edit Coach" : "Add New Coach";
 
@@ -590,8 +587,20 @@ const StaffDashboard = () => {
 
   // FIX 1: Initialize pendingRegistrations state to resolve ReferenceError
   const [pendingRegistrations, setPendingRegistrations] = useState([
-    { id: 1, name: "Reg A", parent: "Parent X", date: "2025-11-20", status: "Pending Review" },
-    { id: 2, name: "Reg B", parent: "Parent Y", date: "2025-11-19", status: "Pending Payment" },
+    {
+      id: 1,
+      name: "Reg A",
+      parent: "Parent X",
+      date: "2025-11-20",
+      status: "Pending Review",
+    },
+    {
+      id: 2,
+      name: "Reg B",
+      parent: "Parent Y",
+      date: "2025-11-19",
+      status: "Pending Payment",
+    },
   ]);
 
   const paymentOverview = [
@@ -633,38 +642,44 @@ const StaffDashboard = () => {
   // FIX 3: Define bulkImportApi (Local helper to call the backend)
   const bulkImportApi = async (file) => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     try {
       // NOTE: This URL must match your backend server.js import route
-      const response = await fetch('/api/registrations/import', {
-          method: 'POST',
-          body: formData,
+      const response = await fetch("/api/registrations/import", {
+        method: "POST",
+        body: formData,
       });
 
       // Handle HTTP errors (e.g., 404, 500)
       if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: 'Server responded with an error, but no JSON error message was provided.' }));
-          throw new Error(errorData.error || errorData.message || `HTTP error! Status: ${response.status}`);
+        const errorData = await response
+          .json()
+          .catch(() => ({
+            message:
+              "Server responded with an error, but no JSON error message was provided.",
+          }));
+        throw new Error(
+          errorData.error ||
+            errorData.message ||
+            `HTTP error! Status: ${response.status}`
+        );
       }
 
       // Handle successful response
       return await response.json();
-
     } catch (err) {
       // Handle network errors (e.g., 'Failed to fetch' - server is down or CORS blocked)
-      if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        throw new Error("Connection failed. Please ensure your backend server is running on and CORS is configured correctly.");
+      if (err instanceof TypeError && err.message === "Failed to fetch") {
+        throw new Error(
+          "Connection failed. Please ensure your backend server is running on and CORS is configured correctly."
+        );
       }
       // Re-throw other errors
       throw err;
     }
   };
 
-
-
-
- 
   // --------------------------------------------------------------------------
 
   // --- Modal Open/Close Handlers (No Change) ---
@@ -911,11 +926,9 @@ const StaffDashboard = () => {
     }
   }, [toast]);
 
-  
-
   // Combined data fetching useEffect
   useEffect(() => {
-    fetchCoachData();    
+    fetchCoachData();
     fetchVenues();
   }, [fetchCoachData, fetchVenues]);
 
@@ -1196,9 +1209,7 @@ const StaffDashboard = () => {
             <div className="flex items-center gap-2">
               <MapPin className="h-5 w-5 text-blue-600" />
               <div>
-                <p className="text-2xl font-bold">
-                  {6}
-                </p>
+                <p className="text-2xl font-bold">{6}</p>
                 <p className="text-xs text-muted-foreground">Active Venues</p>
               </div>
             </div>
@@ -1223,11 +1234,9 @@ const StaffDashboard = () => {
           </TabsTrigger>
         </TabsList>
 
-         <TabsContent value="registrations">
+        <TabsContent value="registrations">
           <PendingRegistrations />
         </TabsContent>
-
-      
 
         <TabsContent value="players" className="space-y-4">
           <Card className="shadow-card">
@@ -1493,20 +1502,21 @@ const StaffDashboard = () => {
                 Add New Coach
               </Button>
             </CardHeader>
+
             <CardContent className="pt-4">
               <div className="space-y-3">
                 {coaches.map((coach) => (
                   <div
                     key={coach.coach_id}
-                    className="flex items-center justify-between p-4 bg-muted rounded-lg"
+                    className="flex items-center justify-between p-4 bg-muted rounded-lg cursor-pointer hover:bg-accent"
+                    onClick={() => navigate(`/coach-old/${coach.coach_id}`)}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
-                        {/* Avatar shows the first initial */}
                         {coach.coach_name ? coach.coach_name.charAt(0) : "?"}
                       </div>
+
                       <div>
-                        {/* Line 1: Coach Name, Phone Number, and Weekly Salary */}
                         <p className="font-medium flex items-center gap-2">
                           {coach.coach_name}
                           <span className="text-sm font-normal text-gray-500">
@@ -1517,14 +1527,17 @@ const StaffDashboard = () => {
                           </span>
                         </p>
 
-                        {/* Line 2 (FIXED): Email and Address */}
                         <p className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
                           <span className="font-normal">{coach.email}</span>
                           <span className="font-normal">• {coach.address}</span>
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+
+                    <div
+                      className="flex items-center gap-3"
+                      onClick={(e) => e.stopPropagation()} // Prevent row click
+                    >
                       <div className="text-right hidden sm:block">
                         <p className="text-sm font-medium">
                           ₹{coach.salary.toLocaleString()}
@@ -1532,7 +1545,6 @@ const StaffDashboard = () => {
                         <p className="text-xs text-muted-foreground">Monthly</p>
                       </div>
 
-                      {/* Status is correctly shown in the Badge */}
                       <Badge
                         variant={
                           coach.status === "Active" ? "default" : "secondary"
@@ -1540,6 +1552,7 @@ const StaffDashboard = () => {
                       >
                         {coach.status}
                       </Badge>
+
                       <Button
                         size="sm"
                         variant="outline"
@@ -1550,7 +1563,7 @@ const StaffDashboard = () => {
 
                       <Button
                         size="sm"
-                        variant="destructive" // Use destructive variant for delete
+                        variant="destructive"
                         onClick={() =>
                           handleDeleteCoach(
                             coach.id || coach.coach_id,
