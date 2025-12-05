@@ -3,7 +3,6 @@ const API_URL = 'http://localhost:5000';
 
 
 import axios from "axios";
-//import jwt from "jsonwebtoken";
 
 export const getToken = () => {
   try {
@@ -23,6 +22,7 @@ export const getAuthHeaders = () => {
     Authorization: token ? `Bearer ${token}` : "",
   };
 };
+
 const handleApiCall = async (url, options = {}) => {
   try {
     const response = await fetch(url, {
@@ -31,18 +31,15 @@ const handleApiCall = async (url, options = {}) => {
       },
       ...options,
     });
-
-    // Attempt to parse JSON response
+  
     let data;
     try {
       data = await response.json();
-    } catch (e) {
-      // If parsing fails (e.g., empty 204 No Content response), set data to null
+    } catch (e) {    
       data = null;
     }
 
-    if (!response.ok) {
-      // If the response is not OK (4xx, 5xx), throw an error with the details
+    if (!response.ok) {      
       const errorMessage =
         data && data.error
           ? data.error
@@ -52,7 +49,6 @@ const handleApiCall = async (url, options = {}) => {
       throw new Error(errorMessage);
     }
 
-    // Return the data for successful calls
     return data;
   } catch (error) {
     console.error(`API Call Failed (${url}):`, error.message);
@@ -95,16 +91,12 @@ export const loginUser = async ({ email, password, role }) => {
     const data = await response.json();
 
     if (!response.ok) {
-      // The backend returns an error object like { error: "Invalid credentials." }
-      // This handles 401, 403, and 500 errors.
       return { data: null, error: data.error || "Login failed." };
     }
-
-    // Successful login (200 OK)
     return {
       data: {
-        user: data.user, // The user object
-        token: data.token, // The JWT token
+        user: data.user,
+        token: data.token, 
         role: data.user.role,
       },
       error: null,
@@ -133,7 +125,6 @@ export const GetPlayerDetails = async () => {
 };
 
 //add the new details of player to the database
-// 🌟 NO ERRORS FOUND - CODE IS CORRECT FOR HANDLING FormData WITH FILE UPLOADS 🌟
 export const AddNewPlayerDetails = async (formDataToSend) => {
   try {
     const response = await axios.post(

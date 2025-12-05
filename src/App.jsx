@@ -4,13 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import React from "react";
-
-// ✅ CORRECT: Import AuthProvider using the consistent alias path
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-
-// Ensure path is correct, assuming your Auth.jsx is in a 'pages' folder
 import Auth from "./pages/Auth";
-// The other pages imports remain the same:
 import Index from "./pages/Index";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCanceled from "./pages/PaymentCanceled";
@@ -26,7 +21,6 @@ import CoachDetails from "./pages/CoachDetails";
 
 const queryClient = new QueryClient();
 
-// Component to handle redirection from the root path (/)
 const IndexRouter = () => {
   const { user, isLoading } = useAuth();
 
@@ -37,30 +31,22 @@ const IndexRouter = () => {
   }
 
   if (user && user.role) {
-    // Redirect to the role-specific dashboard
     return <Navigate to={`/${user.role}`} replace />;
   }
 
-  // If not logged in, redirect to the login page
   return <Navigate to="/auth" replace />;
 };
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      {/* 🏆 The AuthProvider component correctly wraps the entire application */}
       <AuthProvider>
         <Toaster />
         <Sonner />
         <BrowserRouter>
           <Routes>
-            {/* The Index component handles ALL role-based dashboard rendering at the root path */}
-            {/* 🔑 FIXED: Use the IndexRouter component to handle redirect logic */}
             <Route path="/" element={<IndexRouter />} />
-            <Route path="/auth" element={<Auth />} />
-            {/* <Route path="/login" element={<Login />} /> */}
-
-            {/* Dashboard Routes (Protected by AuthGuard in a real app, but rendered directly here) */}
+            <Route path="/auth" element={<Auth />} />            
             <Route path="/parent" element={<ParentDashboard />} />
             <Route path="/coach" element={<CoachDashboard />} />
             <Route path="/staff" element={<StaffDashboard />} />
@@ -73,12 +59,9 @@ const App = () => (
             <Route path="/assign-students" element={<AssignStudents />} />
 
             <Route path="/coach-old/:coachId" element={<CoachDetails />} />
-
-            {/* Payment Routes */}
+       
             <Route path="/payment-success" element={<PaymentSuccess />} />
             <Route path="/payment-canceled" element={<PaymentCanceled />} />
-
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -1,5 +1,3 @@
-// CoachDetails.jsx - FINAL VERSION WITH ALL FIXES (Chart Data & Delete Logic)
-
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -31,7 +29,6 @@ import {
   Pencil,
 } from "lucide-react";
 
-/* Dialog / Select / Input / Label components (your UI library) */
 import {
   Dialog,
   DialogContent,
@@ -50,8 +47,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-// Note: The actual 'api' file (where these are defined) must also include a configured 'axios' instance
-// and the 'getAuthHeaders' function for these to work correctly.
 import {
   getCoachDetails,
   getCoachPlayers,
@@ -90,7 +85,6 @@ const ATTENDANCE_RANGES = {
 const CoachDetails = () => {
   const { coachId } = useParams();
   const navigate = useNavigate();
-
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [coachData, setCoachData] = useState(null);
   const [assignedPlayers, setAssignedPlayers] = useState([]);
@@ -98,13 +92,9 @@ const CoachDetails = () => {
   const [localAttendance, setLocalAttendance] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
-
   const [isEditing, setIsEditing] = useState(false);
-  // Store the ID as received, which could be a string or a number
   const [editingScheduleId, setEditingScheduleId] = useState(null);
-
   const [schedules, setSchedules] = useState([]);
-
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [newSchedule, setNewSchedule] = useState({
     day: "",
@@ -141,12 +131,7 @@ const CoachDetails = () => {
     "7:00 PM",
     "8:00 PM",
     "9:00 PM",
-  ];
-
-  // =======================================================
-  // CHART DATA DEFINITIONS (Ensures playersByCategoryChartData is defined)
-  // =======================================================
-
+  ];  
   const averageAttendance = useMemo(() => {
     if (!assignedPlayers.length) return 0;
     const total = assignedPlayers.reduce((sum, p) => sum + p.attendance, 0);
@@ -211,10 +196,6 @@ const CoachDetails = () => {
       }));
   }, [assignedPlayers]);
 
-  // =======================================================
-  // END CHART DATA DEFINITIONS
-  // =======================================================
-
   useEffect(() => {
     let cancelled = false;
 
@@ -226,9 +207,7 @@ const CoachDetails = () => {
         setIsLoading(false);
         return;
       }
-
       setIsLoading(true);
-
       try {
         const [coachDetailsRaw, playersListRaw] = await Promise.all([
           getCoachDetails(coachId),
@@ -316,7 +295,6 @@ const CoachDetails = () => {
     };
   }, [coachId]);
 
-  // Fetch schedules with coachId
   useEffect(() => {
     let cancelled = false;
 
@@ -345,8 +323,6 @@ const CoachDetails = () => {
         setSchedules(transformedSessions);
       } catch (err) {
         if (cancelled) return;
-        // The error handling in the API call should now return a 200 with [] if no sessions are found,
-        // but a 500 error will still be caught here.
         console.error("Failed to load schedules", err);
         toast({
           title: "Error Loading Schedules",
@@ -410,7 +386,7 @@ const CoachDetails = () => {
     setIsScheduleDialogOpen(true);
   };
 
-  // Helper to reset the form state
+
   const resetForm = () => {
     setIsEditing(false);
     setEditingScheduleId(null);
@@ -428,7 +404,6 @@ const CoachDetails = () => {
   const handleSaveSchedule = async () => {
     if (isSubmitting || !coachData) return;
 
-    // basic validation
     if (
       !newSchedule.group ||
       !newSchedule.startTime ||
@@ -458,7 +433,6 @@ const CoachDetails = () => {
     };
 
     try {
-      // Check if the ID is a real, persisted ID (not a temporary one starting with 's-')
       const isRealId =
         isEditing &&
         editingScheduleId &&
@@ -469,7 +443,6 @@ const CoachDetails = () => {
           ? editingScheduleId
           : Number(editingScheduleId);
 
-        // API call to update the existing session
         const result = await updateSession(idToUpdate, sessionData);
 
         setSchedules((prev) =>
@@ -499,7 +472,6 @@ const CoachDetails = () => {
           description: `Session for ${sessionData.group_category} on ${sessionData.day_of_week} updated successfully.`,
         });
       } else {
-        // API call to insert a new session
         const result = await insertSession(sessionData);
         const newSession = {
           id: result.session_id || result.id || `s-${Date.now()}`,
@@ -557,21 +529,16 @@ const CoachDetails = () => {
     if (!confirmed) return;
 
     const numericId = Number(session_id);
-    // isPersisted is true if the ID is a valid number (>0), meaning it's from the database
     const isPersisted = Number.isInteger(numericId) && numericId > 0; 
 
     setIsSubmitting(true);
     try {
       if (isPersisted) {
-        // Only call the API for database-persisted sessions
         const status = await deleteSession(session_id); 
         if (status !== 204 && status !== 200) {
-          // Check for successful status codes (204 No Content, 200 OK)
           throw new Error(`Unexpected response from server: ${status}`);
         }
-      }
-
-      // Optimistically update the UI by filtering out the session
+      }     
       setSchedules((prev) =>
         prev.filter((s) => String(s.id) !== String(session_id))
       );
@@ -714,7 +681,6 @@ const CoachDetails = () => {
           </div>
         </CardContent>
       </Card>
-      {/* Tabs Component */}
       <Tabs defaultValue="players">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="players" className="flex items-center gap-2">
@@ -729,9 +695,7 @@ const CoachDetails = () => {
 
         <TabsContent value="players" className="mt-4">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {/* Column 1: Charts */}
             <div className="xl:col-span-1 space-y-6">
-              {/* Bar Chart Card (Players by Category) */}
               <Card className="glass-card animate-fade-up">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold font-display">
@@ -789,7 +753,7 @@ const CoachDetails = () => {
                 </CardContent>
               </Card>
               
-              {/* Pie Chart Card (Attendance Distribution) */}
+              
               <Card className="glass-card animate-fade-up">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold font-display">
@@ -898,7 +862,6 @@ const CoachDetails = () => {
           </div>
         </TabsContent>
 
-        {/* Training Schedule Tab */}
         <TabsContent value="schedule" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -958,7 +921,7 @@ const CoachDetails = () => {
                           <Pencil className="h-4 w-4 text-primary" />
                         </Button>
                         <button
-                          className="btn-ghost btn-icon" // replace with your button classes
+                          className="btn-ghost btn-icon" 
                           onClick={() => handleDeleteSchedule(session.id)}
                           disabled={isSubmitting}
                           title="Delete schedule"
@@ -974,12 +937,11 @@ const CoachDetails = () => {
           </Card>
         </TabsContent>
       </Tabs>
-      {/* Add/Edit Schedule Dialog */}
       <Dialog
         open={isScheduleDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
-            resetForm(); // Reset form state when dialog is closed
+            resetForm(); 
           }
           setIsScheduleDialogOpen(open);
         }}
