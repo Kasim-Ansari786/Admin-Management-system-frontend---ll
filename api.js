@@ -1,5 +1,5 @@
 // api.js
-const API_URL = 'http://localhost:5000';
+const API_URL = "https://academy-nexus-2-g46z.onrender.com";
 
 
 import axios from "axios";
