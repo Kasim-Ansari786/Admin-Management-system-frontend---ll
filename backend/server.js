@@ -78,7 +78,7 @@ app.post("/api/signup", async (req, res) => {
 // server.js (or login route file)
 
 app.post("/api/login", async (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, password, role } = req.body; 
   if (!email || !password || !role) {
     return res.status(400).json({ error: "Missing email, password, or role." });
   }
@@ -98,19 +98,16 @@ app.post("/api/login", async (req, res) => {
     if (!match) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
+    // Final check for role mismatch
     if (user.role !== role) {
       return res.status(403).json({ error: "Access denied for this role." });
     }
+    
+    // JWT creation and response (omitted for brevity, but correct)
     const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      },
+      { id: user.id, email: user.email, role: user.role },
       JWT_SECRET,
-      {
-        expiresIn: "1h",
-      }
+      { expiresIn: "1h" }
     );
 
     res.json({
@@ -1438,38 +1435,32 @@ app.put("/api/registrations/status/:id", async (req, res) => {
   }
 });
 
+
+
 //Delete the Registrations Serever.js and API
-app.put("/api/registrations/reject", async (req, res) => {
-  const { id } = req.body;
+app.delete("/api/registrations/:id", async (req, res) => {
+  const { id } = req.params; 
   if (!id) {
     return res.status(400).json({ error: "Registration ID (id) is required." });
   }
 
   try {
     const queryText = `
-      UPDATE cd.registrations_details
-      SET active = false, Status = 'Rejected'
-      WHERE regist_id = $1
-      RETURNING *;
+      DELETE FROM cd.registrations_details 
+      WHERE regist_id = $1;
     `;
-
     const result = await pool.query(queryText, [id]);
-
     if (result.rowCount === 0) {
       return res
         .status(404)
         .json({ message: `Registration with ID ${id} not found.` });
     }
-
-    res.status(200).json({
-      message: "Registration successfully rejected.",
-      rejectedRegistration: result.rows[0],
-    });
+    res.status(204).send();     
   } catch (error) {
-    console.error("Error rejecting registration:", error.stack);
+    console.error("Error deleting registration:", error.stack);
     res
       .status(500)
-      .json({ error: "Failed to reject registration due to a server error." });
+      .json({ error: "Failed to delete registration due to a server error." });
   }
 });
 

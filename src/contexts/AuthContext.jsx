@@ -1,5 +1,7 @@
+// src/contexts/AuthContext.jsx
+
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { signupUser, loginUser } from "../../api";
+import { signupUser, loginUser } from "../../api"; // Make sure path is correct
 // Create the context
 const AuthContext = createContext(undefined);
 
@@ -40,7 +42,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // ----------- FIXED LOGIN (Returns { error } on failure) ----------
+  // ----------- LOGIN function (Calls the corrected loginUser API function) ----------
   const login = async (email, password, role) => {
     setError(null);
     setIsLoading(true);

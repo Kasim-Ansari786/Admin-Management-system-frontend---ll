@@ -1,3 +1,5 @@
+// src/components/dashboards/LoginForm.jsx
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +14,9 @@ import { Eye, EyeOff, User, LogIn as LogInIcon } from 'lucide-react';
 const LoginForm = ({ onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('/auth'); // Default to 'coach' for this demo
+  // FIX: Default value was '/auth', which is incorrect for the API call. 
+  // Changed to a valid role, like 'coach'.
+  const [role, setRole] = useState('coach'); 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // Local loading state for form submission
 
@@ -22,7 +26,7 @@ const LoginForm = ({ onSwitchToSignup }) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Call the login function from AuthContext
+    // Call the login function from AuthContext with email, password, and role
     const { error } = await login(email, password, role);
 
     if (error) {
@@ -31,7 +35,6 @@ const LoginForm = ({ onSwitchToSignup }) => {
         toast.success("Login Successful", { description: "Redirecting to dashboard..." });
     }
     
-    // AuthContext handles the user/session state change which triggers routing
     setIsLoading(false);
   };
 

@@ -421,19 +421,17 @@ const handleApprove = async () => {
 
   // ----------------------------------------------------
   // DELETE (Rejection API call is performed here)
-  // ----------------------------------------------------
 const handleDelete = async (id) => {
     try {
-      // API call to delete/reject the registration
+      // 2. Call the new DELETE function
       await deleteRegistration(id);
       
-      // Update local state by filtering out the rejected item
+      // Update the local state to remove the deleted item
       setRegistrations((prev) => prev.filter((r) => r.id !== id));
       
-      // Calculate total items after deletion based on the current filtered list
+      // Pagination logic: Check if the current page is now empty
       const totalItemsAfterDeletion = filteredRegistrations.length - 1;
-
-      // Adjust pagination if the current page is now empty
+      
       if (
         totalItemsAfterDeletion <= (currentPage - 1) * RECORDS_PER_PAGE &&
         currentPage > 1
@@ -441,24 +439,25 @@ const handleDelete = async (id) => {
         setCurrentPage((prev) => prev - 1);
       }
       
+      // Success toast
       toast({
         title: "Success",
-        description: `Registration ${id} successfully rejected and removed.`,
+        description: `Registration ${id} successfully deleted.`,
       });
 
     } catch (error) {
       console.error("Deletion failed:", error.message);
+      // Error toast
       toast({
         title: "Error",
-        description: `Failed to reject registration ${id}.`,
+        description: `Failed to delete registration ${id}.`,
         variant: "destructive",
       });
     }
-  };
+};
 
   // ----------------------------------------------------
   // SEARCH & FILTER LOGIC
-  // ----------------------------------------------------
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
     // Reset to the first page on every search

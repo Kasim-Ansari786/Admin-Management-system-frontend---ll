@@ -85,19 +85,23 @@ export const loginUser = async ({ email, password, role }) => {
     const response = await fetch(`${API_URL}/api/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, role }),
+      // CRITICAL: Must include role to pass the backend check
+      body: JSON.stringify({ email, password, role }), 
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      return { data: null, error: data.error || "Login failed." };
+      // Use the server's error message if available
+      const errorMessage = data.message || data.error || "Login failed.";
+      return { data: null, error: errorMessage };
     }
+    
     return {
       data: {
         user: data.user,
         token: data.token, 
-        role: data.user.role,
+        role: data.user.role, 
       },
       error: null,
     };
@@ -557,8 +561,7 @@ export const getPlayerDetailsByGuardianEmail = async (email, token) => {
     throw new Error("Missing authentication credentials (email or token).");
   }
 
-  try {
-    // 2. API Call with Bearer Token
+  try { 
     const response = await fetch(`${API_URL}/api/player-details/${email}`, {
       method: "GET",
       headers: {
@@ -569,14 +572,11 @@ export const getPlayerDetailsByGuardianEmail = async (email, token) => {
 
   
     if (!response.ok) {
-      let errorData = {};
-      // Attempt to parse the error message from the response body
+      let errorData = {}; 
       try {
         errorData = await response.json();
-      } catch (e) {
-        // Ignore JSON parsing error if response body is empty (e.g., 403 Forbidden without body)
+      } catch (e) { 
       }
-      // Throw a descriptive error including the status and server's message
       throw new Error(
         `API Error ${response.status}: ${
           errorData.error || errorData.message || "Failed to fetch players."
@@ -740,25 +740,20 @@ export const updateRegistrationData = async (regist_id, newStatus) => {
 //delete the registration
 export const deleteRegistration = async (registId) => {
   try {
-    const response = await fetch(`${API_URL}/api/registrations/reject`, {
-      method: "PUT",
+    const response = await fetch(`${API_URL}/api/registrations/${registId}`, {
+      method: "DELETE", 
       headers: {
-        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ id: registId }),
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      throw new Error(data.error || data.message || "Failed to reject registration.");
+        const data = await response.json();
+        throw new Error(data.error || data.message || "Failed to delete registration.");
     }
-
-    return data;
-
+    return { success: true, id: registId };
   } catch (error) {
-    console.error(`Error rejecting registration ${registId}:`, error);
-    throw error;
+    console.error(`Error deleting registration ${registId}:`, error);
+    throw error; 
   }
 };
 
