@@ -423,13 +423,8 @@ const handleApprove = async () => {
   // DELETE (Rejection API call is performed here)
 const handleDelete = async (id) => {
     try {
-      // 2. Call the new DELETE function
       await deleteRegistration(id);
-      
-      // Update the local state to remove the deleted item
       setRegistrations((prev) => prev.filter((r) => r.id !== id));
-      
-      // Pagination logic: Check if the current page is now empty
       const totalItemsAfterDeletion = filteredRegistrations.length - 1;
       
       if (
@@ -437,17 +432,15 @@ const handleDelete = async (id) => {
         currentPage > 1
       ) {
         setCurrentPage((prev) => prev - 1);
-      }
+      }     
       
-      // Success toast
       toast({
         title: "Success",
         description: `Registration ${id} successfully deleted.`,
       });
 
     } catch (error) {
-      console.error("Deletion failed:", error.message);
-      // Error toast
+      console.error("Deletion failed:", error.message);    
       toast({
         title: "Error",
         description: `Failed to delete registration ${id}.`,
@@ -460,26 +453,21 @@ const handleDelete = async (id) => {
   // SEARCH & FILTER LOGIC
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
-    // Reset to the first page on every search
     setCurrentPage(1);
   };
   
-  // NEW: Handle status filter change
   const handleFilterStatusChange = (e) => {
     setFilterStatus(e.target.value);
-    setCurrentPage(1); // Reset to the first page when changing filters
+    setCurrentPage(1); 
   }
 
 
   const filteredRegistrations = registrations.filter(
     (reg) => {
-      // 1. Search Filter
       const searchMatch = 
         reg.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         reg.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        reg.phoneNumber.includes(searchQuery);
-
-      // 2. Status Filter
+        reg.phoneNumber.includes(searchQuery); 
       const statusMatch = 
         filterStatus === 'All' || 
         reg.Status === filterStatus;
@@ -514,7 +502,6 @@ const handleDelete = async (id) => {
       </CardHeader>
 
       <CardContent>
-        {/* SEARCH + FILTER + IMPORT + EXPORT */}
         <div className="flex gap-4 mb-6">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -526,8 +513,6 @@ const handleDelete = async (id) => {
             />
           </div>
           
-          {/* NEW: Status Filter Select */}
-          {/* NOTE: You should ideally replace this with the <Select> component from shadcn/ui */}
           <select 
               value={filterStatus} 
               onChange={handleFilterStatusChange}
@@ -546,7 +531,6 @@ const handleDelete = async (id) => {
             accept=".xlsx,.xls"
             onChange={handleImport}
             className="hidden"
-            // Disable file input while loading
             disabled={isLoading}
           />
 
@@ -569,12 +553,11 @@ const handleDelete = async (id) => {
           </Button>
         </div>
 
-        {/* LOADING / EMPTY / TABLE */}
+     
         {isLoading ? (
           <div className="text-center py-12 text-muted-foreground border rounded-lg">
             <Loader2 className="h-6 w-6 animate-spin mx-auto mb-3" />
             <p className="text-lg">
-              {/* Show a more specific message during import */}
               {fileInputRef.current && fileInputRef.current.files.length > 0
                 ? "Importing and saving data..."
                 : "Loading..."}
@@ -590,7 +573,6 @@ const handleDelete = async (id) => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {/* Serial Number Column Header */}
                     <TableHead className="w-[50px]">Sr/No</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Phone</TableHead>
@@ -605,10 +587,8 @@ const handleDelete = async (id) => {
                 </TableHeader>
 
                 <TableBody>
-                  {/* Use paginatedRegistrations here */}
                   {paginatedRegistrations.map((reg, index) => (
                     <TableRow key={reg.id ?? `${reg.email}-${index}`}>
-                      {/* Serial Number Cell */}
                       <TableCell className="font-medium">
                         {startIndex + index + 1}
                       </TableCell>
@@ -625,14 +605,13 @@ const handleDelete = async (id) => {
                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                 reg.Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
                                 reg.Status === 'Approved' ? 'bg-green-100 text-green-800' :
-                                'bg-red-100 text-red-800' // Use red for rejected
+                                'bg-red-100 text-red-800'
                             }`}>
                                 {reg.Status}
                             </span>
                         ) : 'Pending'}
                       </TableCell>
-                      <TableCell className="text-right">
-                        {/* The handleViewDetails function is now defined */}
+                      <TableCell className="text-right">                        
                         <Button
                           variant="outline"
                           size="icon"
@@ -642,7 +621,7 @@ const handleDelete = async (id) => {
                           <Eye className="h-4 w-4" />
                         </Button>
 
-                        {/* Only show Trash icon if status is not Approved */}
+                        
                         {reg.Status !== 'Approved' && (
                           <Button
                             variant="ghost"
@@ -658,7 +637,6 @@ const handleDelete = async (id) => {
                 </TableBody>
               </Table>
             </div>
-            {/* PAGINATION CONTROLS */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
@@ -693,7 +671,6 @@ const handleDelete = async (id) => {
           </div>
         )}
 
-        {/* Dialog component now has the necessary state and handlers */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent>
             <DialogHeader>
