@@ -13,9 +13,22 @@ const { Pool } = pg;
 
 const app = express();
 
+// Allow multiple frontend ports (8080, 8081, or any localhost port for development)
+const allowedOrigins = [
+  "http://localhost:8080", 
+];
+
 app.use(
   cors({
-    origin: "http://localhost:8080", // Allow requests from your front-end port
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
@@ -26,71 +39,101 @@ app.use(
 const pool = new Pool({
   user: "postgres",
   host: "localhost",
-  database: "admincomdata",
+  database: "Admindb",
   password: "Admin@123",
   port: 5432,
 });
-const JWT_SECRET = "SECRET_KEY";
+const JWT_SECRET = "your_super_secret_key_12345";
 
 app.use(express.json());
 
+// ---------------------------------------------
+// SIGNUP /api/signup
+// ---------------------------------------------
+app.post("/api/signup", async (req, res) => {
+  const { name, email, password, role } = req.body;
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({
+      error:
+        "Missing required fields: name, email, password, and role are needed.",
+    });
+  }
+
+  try {
+    const saltRounds = 10;
+    const password_hash = await bcrypt.hash(password, saltRounds);
+    const sqlQuery = `
+            INSERT INTO cd.users_login (full_name, email, password_hash, role)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, full_name, email, role, created_at; 
+        `;
+
+    const values = [name, email, password_hash, role];
+    const result = await pool.query(sqlQuery, values);
+    res.status(201).json({
+      message: "User created successfully",
+      user: result.rows[0],
+      tenant_id: result.rows[0].id,
+    });
+  } catch (err) {
+    console.error("SERVER ERROR during signup:", err.stack);
+    if (err.code === "23505") {
+      return res.status(409).json({
+        error: "A user with this email already exists.",
+      });
+    }
+
+    if (err.code === "23503") {
+      return res.status(500).json({
+        error: `Database setup error: The 'fk_users_tenant' constraint still exists and must be dropped.`,
+      });
+    }
+
+    res.status(500).json({
+      error: "An unexpected internal server error occurred during signup.",
+    });
+  }
+});
+
+// --- JWT Authentication Middleware (Verification) ---
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
-
-  if (token == null)
-    return res.status(401).json({ error: "Access Denied: No Token Provided" });
-
+  if (token == null) {
+    return res.status(401).json({ error: "Unauthorized: Token missing." });
+  }
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err)
-      return res.status(403).json({ error: "Access Denied: Invalid Token" }); // <-- This is where the error originates
+    if (err) {
+      return res
+        .status(403)
+        .json({ error: "Forbidden: Token is invalid or expired." });
+    }
+
     req.user = user;
+    req.tenant_id =
+      user?.tenant_id || user?.tenant || user?.id || user?._id || null;
+    try {
+      const shortId = req.tenant_id
+        ? String(req.tenant_id).slice(0, 8)
+        : "null";
+      console.debug(`[Auth] verified token for tenant: ${shortId}`);
+    } catch (e) {}
+
     next();
   });
 };
 
-// ---------------------------------------------
-// SIGNUP
-// ---------------------------------------------
-app.post("/api/signup", async (req, res) => {
-  const { email, password, name, role } = req.body;
-
-  try {
-    const hash = await bcrypt.hash(password, 10);
-    const result = await pool.query(
-      `
-      INSERT INTO cd.users_login (full_name, email, password_hash, role)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, email, role;
-      `,
-      [name, email, hash, role]
-    );
-
-    res.status(201).json({ message: "Success", user: result.rows[0] });
-  } catch (error) {
-    res.status(500).json({ error: "Signup failed" });
-  }
-});
-
-// ---------------------------------------------
-// LOGIN
-// ---------------------------------------------
-// server.js (or login route file)
-
 app.post("/api/login", async (req, res) => {
-  const { email, password, role } = req.body; 
+  const { email, password, role } = req.body;
   if (!email || !password || !role) {
     return res.status(400).json({ error: "Missing email, password, or role." });
   }
-
   try {
     const result = await pool.query(
-      `SELECT id, full_name, email, role, password_hash FROM cd.users_login WHERE email = $1`,
+      `SELECT id, tenant_id, full_name, email, role, password_hash FROM cd.users_login WHERE email = $1`,
       [email]
     );
-
     const user = result.rows[0];
-
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
@@ -98,30 +141,34 @@ app.post("/api/login", async (req, res) => {
     if (!match) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
-    // Final check for role mismatch
     if (user.role !== role) {
-      return res.status(403).json({ error: "Access denied for this role." });
+      return res
+        .status(403)
+        .json({ error: `Access denied: You must log in as a ${user.role}.` });
     }
-    
-    // JWT creation and response (omitted for brevity, but correct)
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      {
+        id: user.id,
+        tenant_id: user.tenant_id,
+        email: user.email,
+        role: user.role,
+      },
       JWT_SECRET,
       { expiresIn: "1h" }
     );
-
     res.json({
       message: "Login success",
       token: token,
       user: {
         id: user.id,
+        tenant_id: user.tenant_id,
         name: user.full_name,
         role: user.role,
         email: user.email,
       },
     });
   } catch (error) {
-    console.error("Login Server Error (500):", error);
+    console.error("Login Server Error (500):", error.stack);
     res
       .status(500)
       .json({ error: "Internal Server Error during login process." });
@@ -130,19 +177,6 @@ app.post("/api/login", async (req, res) => {
 // ---------------------------------------------
 // GET PLAYERS
 // ---------------------------------------------
-app.get("/api/players-details", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT id, player_id, name, age, address, phone_no, center_name, coach_name, category, status
-      FROM cd.player_details 
-      ORDER BY id DESC;
-    `);
-
-    res.json(result.rows);
-  } catch {
-    res.status(500).json({ error: "Fetch failed" });
-  }
-});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -195,85 +229,109 @@ const cpUpload = upload.fields([
   { name: "birth_certificate_path", maxCount: 1 },
 ]);
 
-// --- API Route Definition (FIXED SQL to Single Line) ---
-app.post("/api/players-add", (req, res) => {
+//Players Data show the page
+app.get("/api/players", authenticateToken, async (req, res) => {
+  const tenantId = req.user && req.user.tenant_id;
+  if (!tenantId) {
+    console.error(
+      "❌ Auth Error: Tenant ID missing in verified token payload."
+    );
+    return res
+      .status(403)
+      .json({ error: "Forbidden: Token lacks required tenant ID scope." });
+  }
+  try {
+    const query = `
+            SELECT id, player_id, name, age, address, phone_no, center_name, coach_name, category, status
+            FROM cd.player_details
+            WHERE tenant_id = $1;
+        `;
+    const result = await pool.query(query, [tenantId]);
+    res.status(200).json({ players: result.rows });
+  } catch (error) {
+    console.error("❌ Database query failed in /api/players:", error);
+    res
+      .status(500)
+      .json({ error: "Internal Server Error while fetching players." });
+  }
+});
+
+// ADD PLAYER ROUTE (Fixed)
+app.post("/api/players-add", authenticateToken, (req, res) => {
   cpUpload(req, res, async (err) => {
     if (err) {
       console.log("❌ Multer upload error:", err);
-      let errorMessage = "File upload failed";
-      if (err instanceof multer.MulterError) {
-        errorMessage = `Multer Error: ${err.code}`;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
+      const errorMessage = err.message || "File upload failed";
       return res.status(400).json({ error: errorMessage });
     }
-
+    const tenant_id = req.user.tenant_id;
+    const data = req.body;
+    const numericAge = data.age === "" ? null : Number(data.age);
+    const numericCoachId =
+      data.coach_id === "" || data.coach_id === undefined
+        ? null
+        : Number(data.coach_id);
     const filePath = (field) => {
       if (req.files && req.files[field] && req.files[field].length > 0) {
         return `/uploads/${req.files[field][0].filename}`;
       }
       return null;
     };
-
     const profile_photo_path = filePath("profile_photo_path");
     const aadhar_upload_path = filePath("aadhar_upload_path");
     const birth_certificate_path = filePath("birth_certificate_path");
 
-    const data = req.body;
-    const numericAge = data.age === "" ? null : Number(data.age);
+    if (!data.name || !data.date_of_birth || !tenant_id) {
+      return res
+        .status(400)
+        .json({ error: "Missing required fields (name, DOB, or tenant ID)." });
+    }
 
     try {
       const query = `
-                INSERT INTO cd.player_details (
-                    name, age, address, father_name, mother_name, gender, 
-                    date_of_birth, blood_group, email_id, emergency_contact_number, 
-                    guardian_contact_number, guardian_email_id, medical_condition, 
-                    aadhar_upload_path, birth_certificate_path, profile_photo_path, phone_no
-                ) 
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) 
-                RETURNING player_id, name;
+                INSERT INTO cd.player_details ( 
+                    tenant_id, name, father_name, mother_name, gender, 
+                    date_of_birth, age, blood_group, email_id, phone_no, 
+                    emergency_contact_number, guardian_contact_number, guardian_email_id, 
+                    address, medical_condition,
+                    aadhar_upload_path, birth_certificate_path, profile_photo_path
+                )
+                VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 
+                    $12, $13, $14, $15, $16, $17, $18) 
+                RETURNING id, player_id, name;
             `.trim();
 
-      console.log("DEBUG: Final Query String:", query);
-
-      const result = await pool.query(query, [
+      const values = [
+        tenant_id,
         data.name,
-        numericAge,
-        data.address,
         data.father_name,
         data.mother_name,
         data.gender,
         data.date_of_birth,
+        numericAge,
         data.blood_group,
         data.email_id,
+        data.phone_no,
         data.emergency_contact_number,
         data.guardian_contact_number,
         data.guardian_email_id,
+        data.address,
         data.medical_condition,
         aadhar_upload_path,
         birth_certificate_path,
-        profile_photo_path,
-        data.phone_no,
-      ]);
-
-      res.status(201).json({
-        message: "Player added successfully",
-        player: result.rows[0],
-      });
+        profile_photo_path, // $18
+      ];
+      const result = await pool.query(query, values);
+      res
+        .status(201)
+        .json({ message: "Player added successfully", player: result.rows[0] });
     } catch (error) {
       console.error("❌ Database insert failed:", error);
-      const message = error.message || "An unknown database error occurred.";
-
-      if (error.code === "23505") {
-        return res.status(409).json({
-          error: `A player with this email address already exists.`,
-          details: error.detail,
-        });
-      }
+      const errorCode = error.code || "UNKNOWN_DB_ERROR";
       res.status(500).json({
         error: "Internal Server Error: Database insertion failed.",
-        details: message,
+        code: errorCode,
       });
     }
   });
@@ -286,20 +344,13 @@ app.get("/api/Player-edit", async (req, res) => {
   // We will use a dedicated client from the pool to ensure proper transaction management (though optional for a SELECT)
   let client;
   try {
-    // 1. Extract parameters from the request query string
     const { id, player_id } = req.query;
-
-    // 2. Validate essential parameters (already correct)
     if (!id || !player_id) {
       return res
         .status(400)
         .json({ error: "Missing required parameters: id and player_id" });
     }
-
-    // --- Database Connection FIX ---
-    // Get a client from the connection pool
     client = await pool.connect();
-
     const queryText = `
             SELECT 
                 id,
@@ -332,10 +383,7 @@ app.get("/api/Player-edit", async (req, res) => {
                 AND player_id = $2;
         `;
 
-    // 3. Execute the query using the connected client
     const result = await client.query(queryText, [id, player_id]);
-
-    // 4. Send the single fetched row as JSON response
     if (result.rows.length === 0) {
       return res
         .status(404)
@@ -344,14 +392,12 @@ app.get("/api/Player-edit", async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (error) {
-    // 5. Handle any server/database errors
     console.error("Error fetching player details:", error);
     res.status(500).json({
       error: "Internal Server Error",
       details: error.message,
     });
   } finally {
-    // 6. Release the client back to the pool
     if (client) {
       client.release();
     }
@@ -537,143 +583,166 @@ app.delete("/api/Player-Delete/:id", async (req, res) => {
 });
 
 // 1. POST Route for adding a new coach (INSERT)
-app.post("/api/coaches-add", async (req, res) => {
-  try {
-    const {
-      coach_name,
-      phone_numbers,
-      email,
-      address,
-      players = 0,
-      salary,
-      attendance, // This field was NOT in the SQL VALUES list!
-      week_salary = 0,
-      category = "Other",
-      active = true,
-      status = "Active",
-    } = req.body;
+app.post("/api/coaches", authenticateToken, async (req, res) => {
+  const tenant_id = req.user.tenant_id;
+  const {
+    coach_name,
+    phone_numbers,
+    email,
+    address,
+    players,
+    salary,
+    week_salary,
+    category,
+    active,
+    status,
+    attendance,
+  } = req.body;
 
-    // 1. Validate mandatory fields
-    const numericSalary = Number(salary);
-    if (
-      !coach_name ||
-      !email ||
-      !salary ||
-      isNaN(numericSalary) ||
-      numericSalary < 0
-    ) {
-      return res.status(400).json({
-        error:
-          "Missing or invalid required fields (name, email, salary must be positive number).",
-      });
-    }
+  if (!coach_name || !email) {
+    return res
+      .status(400)
+      .send({ message: "Coach name and email are required." });
+  }
 
-    // 2. Convert numerical/boolean fields
-    const numericWeekSalary = Number(week_salary) || 0;
-    const numericPlayers = Number(players) || 0;
-    // FIX APPLIED: Ensure 'active' is correctly parsed to a boolean for the DB.
-    const isActive = active === true || active === "true" || active === 1;
+  if (!tenant_id) {
+    console.error(
+      "Authentication Error: tenant_id is missing from the verified JWT token."
+    );
+    return res
+      .status(401)
+      .send({ message: "Authentication failed. Tenant ID is missing." });
+  }
 
-    const sql = `
-        INSERT INTO cd.coaches_details
-            (coach_name, phone_numbers, email, address, players, salary, week_salary, category, active, status, attendance)
-        VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        RETURNING coach_id, coach_name; 
+  const sqlQuery = `
+        INSERT INTO cd.coaches_details 
+        (tenant_id, coach_name, phone_numbers, email, address, players, 
+         salary, week_salary, category, active, status, attendance)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        RETURNING coach_id, coach_name, tenant_id;
     `;
 
-    // FIX APPLIED: Re-ordered the values array to match the $1, $2, ... placeholders in the SQL query.
-    const values = [
-      coach_name, // $1
-      phone_numbers, // $2
-      email, // $3
-      address, // $4
-      numericPlayers, // $5
-      numericSalary, // $6
-      numericWeekSalary, // $7
-      category, // $8
-      isActive, // $9 (ACTIVE)
-      status, // $10 (STATUS)
-      attendance, // $11 (ATTENDANCE)
-    ];
+  const values = [
+    tenant_id, // $1: The authenticated and secure tenant_id (your fix)
+    coach_name, // $2
+    phone_numbers, // $3
+    email, // $4
+    address, // $5
+    players, // $6
+    salary, // $7
+    week_salary, // $8
+    category, // $9
+    active, // $10
+    status, // $11
+    attendance, // $12
+  ];
+  console.log("SQL VALUES being inserted:", values);
 
-    const result = await pool.query(sql, values);
-
-    // Ensure the response matches the client-side expectations (e.g., uses the 'coach' key)
-    res.status(201).json({
-      message: "Coach successfully added.",
-      coach: result.rows[0], // Contains 'coach_id' and 'coach_name'
+  try {
+    const result = await pool.query(sqlQuery, values);
+    res.status(201).send({
+      message: "Coach details successfully inserted.",
+      coach: result.rows[0],
     });
   } catch (error) {
-    console.error("❌ Database insertion error for coach:", error.message);
-    res.status(500).json({
-      error: "Failed to add coach details due to a server error.",
-      details: error.message,
+    console.error("--- Database Error during INSERT /api/coaches ---");
+    console.error(error);
+    console.error("----------------------------------------------------");
+    res.status(500).send({
+      message: "Failed to insert coach details due to a server error.",
     });
   }
 });
 
-//assgin the coach and players
-//coach list by the add players coact name list
-app.get("/api/coaches-list", async (req, res) => {
-  console.log("Received request for coach list...");
-
-  // Your specific SQL query
-  const sqlQuery = `SELECT coach_id, coach_name,category FROM cd.coaches_details ORDER BY coach_id ASC`;
+// The authenticateToken middleware runs first to set req.user.tenant_id
+app.get("/api/coaches-list", authenticateToken, async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const sqlQuery = `
+        SELECT coach_id, coach_name, phone_numbers
+        FROM cd.coaches_details
+        WHERE tenant_id = $1 AND active = TRUE
+        ORDER BY coach_id ASC;
+    `;
 
   try {
-    const client = await pool.connect();
-
-    // Execute the query
-    const result = await client.query(sqlQuery);
-    client.release();
-    console.log(`Successfully retrieved ${result.rows.length} coaches.`);
-    return res.json(result.rows);
-  } catch (err) {
-    console.error("Error executing query for coaches:", err.stack);
-    // Send a 500 Internal Server Error response
-    return res.status(500).json({
-      message: "Failed to fetch coach list from the database.",
-      error: err.message,
+    const result = await pool.query(sqlQuery, [tenantId]);
+    res.json({
+      status: "success",
+      count: result.rowCount,
+      data: result.rows,
     });
+  } catch (err) {
+    console.error("Database query error:", err.stack);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch coach details from the database." });
   }
 });
 
 // ---------------------------------------------
 //COACHES GET ROUTE
 // ---------------------------------------------
-app.get("/api/coach-details", async (req, res) => {
-  try {
-    const queryText = `
+// You will need to define `app`, `authenticateToken`, and `pool` elsewhere.
+app.get("/api/coach-details", authenticateToken, async (req, res) => {
+  const tenantId = req.user?.tenant_id;
+  if (!tenantId) {
+    return res.status(401).json({
+      error: "Authentication failed: Tenant ID not found in user session.",
+    });
+  }
+  const sqlQuery = `
         SELECT coach_id,
-          players,
-          coach_name,
-          phone_numbers,
-          salary,
-          email,
-          address,
-          attendance,
-          week_salary,
-          category,
-           status
-     FROM cd.coaches_details ORDER BY coach_id DESC 
+               coach_name,
+               phone_numbers,
+               salary,
+               email,
+               address,
+               week_salary,
+               category,
+               status
+        FROM cd.coaches_details
+        WHERE tenant_id = $1 AND active = TRUE
+        ORDER BY coach_id DESC;
     `;
-    const result = await pool.query(queryText);
-    res.json(result.rows);
-  } catch (error) {
-    console.error("Error fetching coach data:", error);
-    res
-      .status(500)
-      .json({ error: "Internal Server Error", details: error.message });
+
+  try {
+    const result = await pool.query(sqlQuery, [tenantId]);
+
+    if (result.rows.length > 0) {
+      console.log(
+        `Fetched ${result.rows.length} coaches for tenant_id: ${tenantId}`
+      );
+      return res.status(200).json({
+        message: "Coach details retrieved successfully.",
+        tenant_id: tenantId,
+        data: result.rows,
+      });
+    }
+
+    console.log(`No coaches found for tenant_id: ${tenantId}`);
+    return res.status(200).json({
+      message: "No coach details found for this tenant.",
+      tenant_id: tenantId,
+      data: [],
+    });
+  } catch (err) {
+    console.error("Database query error:", err.stack);
+    return res.status(500).json({
+      error: "Failed to retrieve coach details due to a server error.",
+      details: err.message,
+    });
   }
 });
 
 // ---------------------------------------------
 //update the coach details
 // ---------------------------------------------
-app.put("/api/coaches-update/coach_id", async (req, res) => {
+app.put("/api/coaches-update/:id", async (req, res) => {
   try {
+    // 1. Get ID from URL path (most reliable source for a RESTful update)
+    const coachIdFromParams = req.params.id; // This will be "CO31"
+
     const {
-      coach_id,
       coach_name,
       phone_numbers,
       email,
@@ -682,50 +751,35 @@ app.put("/api/coaches-update/coach_id", async (req, res) => {
       week_salary,
       active,
       status,
+      // Note: We don't need to destructure coach_id from req.body anymore
     } = req.body;
 
-    // 1. Validate mandatory fields (using destructured names)
-    const numericCoachId = Number(coach_id);
-    const numericSalary = Number(salary);
+    // --- Data Preparation ---
 
-    if (
-      !coach_id ||
-      isNaN(numericCoachId) ||
-      numericCoachId <= 0 ||
-      !coach_name ||
-      !email ||
-      !salary ||
-      isNaN(numericSalary) ||
-      numericSalary < 0
-    ) {
-      return res.status(400).json({
-        error:
-          "Missing or invalid required fields (coach_id, name, email, salary must be valid).",
-      });
-    }
+    // Safely convert salary to a number, ensuring null if empty or undefined.
+    const numericSalary =
+      salary !== undefined && salary !== null && salary !== ""
+        ? Number(salary)
+        : null;
 
-    // 2. Convert numerical/boolean fields
     const numericWeekSalary = Number(week_salary) || 0;
-    // Ensure 'active' is a proper boolean value for PostgreSQL
     const isActive = active === true || active === "true" || active === 1;
 
-    // 3. The FIXED SQL UPDATE query (Cleaned of all non-standard whitespace)
-    const sql = `
-        UPDATE cd.coaches_details
-        SET 
-          coach_name = $1,
-          phone_numbers = $2,
-          email = $3,
-          address = $4,
-          salary = $5,
-          week_salary = $6,
-          active = $7,
-          status = $8
-        WHERE coach_id = $9
-        RETURNING "coach_id", "coach_name", "status";
-      `;
+    // 2. SQL Query
+    const sql = `UPDATE cd.coaches_details
+SET 
+  coach_name = $1,
+  phone_numbers = $2,
+  email = $3,
+  address = $4,
+  salary = $5,
+  week_salary = $6,
+  active = $7,
+  status = $8
+WHERE coach_id = $9
+RETURNING "coach_id", "coach_name", "status";`;
 
-    // 4. Values array (9 parameters)
+    // 3. Values Array
     const values = [
       coach_name, // $1
       phone_numbers, // $2
@@ -735,14 +789,17 @@ app.put("/api/coaches-update/coach_id", async (req, res) => {
       numericWeekSalary, // $6
       isActive, // $7
       status, // $8
-      numericCoachId, // $9 (WHERE clause)
+      coachIdFromParams, // $9 <-- FIXED: Using ID from req.params.id
     ];
 
     const result = await pool.query(sql, values);
 
+    // 4. Response Handling
+
+    // FIX: Use the reliable ID from the URL (coachIdFromParams) in the message
     if (result.rowCount === 0) {
       return res.status(404).json({
-        error: `Coach with ID ${coach_id} not found.`,
+        error: `Coach with ID ${coachIdFromParams} not found.`,
       });
     }
 
@@ -751,7 +808,6 @@ app.put("/api/coaches-update/coach_id", async (req, res) => {
       coach: result.rows[0],
     });
   } catch (error) {
-    // This is the error handler that returned the 500 status.
     console.error("❌ Database update error for coach:", error.message);
     res.status(500).json({
       error: "Failed to update coach details due to a server error.",
@@ -765,30 +821,28 @@ app.put("/api/coaches-update/coach_id", async (req, res) => {
 // ---------------------------------------------
 app.put("/api/coaches-deactivate/:coach_id", async (req, res) => {
   try {
-    const coachIdParam = req.params.coach_id;
-    const numericCoachId = Number(coachIdParam);
-
-    if (isNaN(numericCoachId) || numericCoachId <= 0) {
-      return res.status(400).json({
-        error: "Invalid coach ID provided in the URL.",
-      });
+    const coachIdParam = String(req.params.coach_id || "").trim();
+    let identifier = coachIdParam;
+    let isNumeric = !isNaN(Number(identifier));
+    if (identifier === "") {
+      return res
+        .status(400)
+        .json({ error: "Invalid coach ID provided in the URL." });
     }
-
     const sql = `
-            UPDATE cd.coaches_details 
-            SET 
-                active = FALSE, 
-                status = 'Inactive' 
-            WHERE coach_id = $1
-            RETURNING coach_id, coach_name, status; 
-        `;
-
-    const values = [numericCoachId];
+        UPDATE cd.coaches_details 
+        SET 
+            active = FALSE, 
+            status = 'Inactive' 
+        WHERE coach_id::text = $1
+        RETURNING coach_id, coach_name, status; 
+    `;
+    const values = [identifier];
     const result = await pool.query(sql, values);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
-        error: `Coach with ID ${numericCoachId} not found.`,
+        error: `Coach with ID ${identifier} not found.`,
       });
     }
 
@@ -796,269 +850,301 @@ app.put("/api/coaches-deactivate/:coach_id", async (req, res) => {
       message: "Coach successfully deactivated.",
       coach: result.rows[0],
     });
-  } catch (error) {
-    console.error("❌ Database deactivation error for coach:", error.message);
-    res.status(500).json({
-      error: "Failed to deactivate coach due to a server error.",
-      details: error.message,
-    });
-  }
+  } catch (error) {}
 });
 
 // 4. API Endpoint to fetch player data
-app.get("/api/players-agssign", async (req, res) => {
-  try {
-    const result = await pool.query(`
-        SELECT player_id, id, name,category,coach_name,coach_id  FROM cd.player_details ORDER BY player_id, id asc;
-      `);
+app.get("/api/players-agssign", authenticateToken, async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const sqlQuery = `
+        SELECT player_id, id, name, coach_name, coach_id
+        FROM cd.player_details
+        WHERE tenant_id = $1 AND active = TRUE
+        ORDER BY player_id, id ASC;
+    `;
 
-    
-    const players = result.rows.map((row) => ({
-      id: row.id, 
-      player_id: row.player_id, 
-      name: row.name,
-      coachId: row.coach_id,
-      category: row.category,
-      coach_name: row.coach_name, 
-    }));   
+  try {
+    console.log(`Executing query for tenant_id: ${tenantId}`);
+    const result = await pool.query(sqlQuery, [tenantId]);
     res.json({
       status: "success",
-      count: players.length,
-      players: players,
+      count: result.rowCount,
+      data: result.rows,
     });
-  } catch (error) {
-    console.error("Error executing query:", error.stack);   
-    res.status(500).json({
-      status: "error",
-      message: "Failed to retrieve player data from the database.",
-      details: error.message,
-    });
+  } catch (err) {
+    console.error("Error executing query", err.stack);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch player details from the database." });
   }
 });
 
 //Update the assigned coach to player
-app.post("/api/update-coach", async (req, res) => {
-  const { coach_name, coach_id, player_id, id } = req.body;
+app.post("/api/update-coach", authenticateToken, async (req, res) => {
+  const {
+    coach_name: incomingCoachName,
+    coach_id,
+    player_id,
+    id,
+  } = req.body || {};
+  const tenant_id = req.user && req.user.tenant_id;
 
-  if (
-    !coach_name ||
-    coach_id === undefined ||
-    player_id === undefined ||
-    id === undefined
-  ) {
-    return res.status(400).json({
-      error:
-        "Missing required parameters: coach_name, coach_id, player_id, or id.",
-    });
+  try {
+    const safe = {
+      coach_name: incomingCoachName
+        ? String(incomingCoachName).slice(0, 100)
+        : null,
+      coach_id: coach_id,
+      player_id: player_id,
+      id: id,
+      tenant_id: tenant_id,
+    };
+    console.log("[/api/update-coach] payload:", safe);
+  } catch (e) {
+    console.warn("[/api/update-coach] failed to log payload", e && e.message);
   }
 
-  const sqlQuery = `
+  if (!tenant_id) {
+    return res
+      .status(403)
+      .json({ error: "Forbidden: Tenant ID missing from token." });
+  }
+
+  const numericId = id !== undefined && id !== null ? Number(id) : NaN;
+  if (isNaN(numericId) || numericId <= 0) {
+    return res
+      .status(400)
+      .json({ error: "Invalid or missing numeric field: id." });
+  }
+
+  const playerIdValue =
+    player_id !== undefined && player_id !== null ? String(player_id) : "";
+  if (!playerIdValue) {
+    return res
+      .status(400)
+      .json({ error: "Missing required field: player_id." });
+  }
+  
+  const numericCoachId =
+    coach_id !== undefined && coach_id !== null ? Number(coach_id) : NaN;
+
+  try {
+    let coachCheck;
+    if (!isNaN(numericCoachId)) {
+      coachCheck = await pool.query(
+        `SELECT coach_id, coach_name FROM cd.coaches_details WHERE coach_id = $1 AND tenant_id = $2 LIMIT 1`,
+        [numericCoachId, tenant_id]
+      );
+    } else {
+      coachCheck = await pool.query(
+        `SELECT coach_id, coach_name FROM cd.coaches_details WHERE coach_id::text = $1 AND tenant_id = $2 LIMIT 1`,
+        [String(coach_id), tenant_id]
+      );
+    }
+
+    if (coachCheck.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ error: "Selected coach not found for your tenant." });
+    }
+
+    const resolvedCoachName = coachCheck.rows[0].coach_name;
+    const resolvedCoachId = coachCheck.rows[0].coach_id;
+
+    const sqlQuery = `
         UPDATE cd.player_details
         SET coach_name = $1,
             coach_id = $2
-        WHERE player_id = $3 AND id = $4; 
+        WHERE player_id = $3 AND id = $4 AND tenant_id = $5
+        RETURNING *;
     `;
 
- 
-  const values = [coach_name, coach_id, player_id, id];
+    const values = [
+      resolvedCoachName,
+      resolvedCoachId,
+      playerIdValue,
+      numericId,
+      tenant_id,
+    ];
 
-  try {
     const result = await pool.query(sqlQuery, values);
 
     if (result.rowCount === 0) {
-      return res
-        .status(404)
-        .json({ message: "No record found matching the criteria for update." });
+      return res.status(404).json({
+        message:
+          "No player record found matching the criteria for update (check IDs and tenant).",
+      });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Coach assigned successfully.",
       updatedRows: result.rowCount,
+      player: result.rows[0],
     });
   } catch (err) {
-    console.error("Database update error:", err);
-    res.status(500).json({
+    console.error("Database update error (/api/update-coach):", err);
+    return res.status(500).json({
       error: "Failed to update coach assignment.",
       details: err.message,
     });
   }
 });
 
-const formatVenueData = (rows) => {
-  const venuesMap = new Map();
+//fetch venue data
+app.get("/api/venues-Details", authenticateToken, async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const client = await pool.connect();
+  const venueQuery = `
+        SELECT
+            v.tenant_id,
+            v.id,
+            v.name AS name,
+            v.status,
+            v.center_head AS "centerHead",
+            v.address,
+            v.google_url AS "googleMapsUrl",
+            ts.id AS "timeslotId",
+            ts.start_time AS "startTime",
+            ts.end_time AS "endTime",
+            d.day AS day
+        FROM cd.venues_data v
+        LEFT JOIN cd.venuetime_slots ts
+            ON ts.venue_id = v.id
+        LEFT JOIN cd.venuetimeslot_days d
+            ON d.time_slot_id::integer = ts.id
+        WHERE v.active = true AND v.tenant_id = $1
+        ORDER BY v.id, ts.id, d.day;
+    `;
 
-  rows.forEach((row) => {
-    const {
-      id,
-      name,
-      centerHead,
-      address,
-      googleMapsUrl,
-      timeslotId,
-      startTime,
-      endTime,
-      day,
-    } = row;
-    if (!venuesMap.has(id)) {
-      venuesMap.set(id, {
-        id,
-        name,
-        centerHead,
-        address,
-        googleMapsUrl,
-        operatingHours: [],
-      });
-    }
+  try {
+    const result = await client.query(venueQuery, [tenantId]);
+    const rows = result.rows;
+    const venuesMap = new Map();
+    rows.forEach((row) => {
+      const venueId = row.id;
 
-    const venue = venuesMap.get(id);
-    if (timeslotId && startTime && endTime && day) {
-      const isSlotAlreadyAdded = venue.operatingHours.some(
-        (slot) =>
-          slot.day === day &&
-          slot.startTime === startTime &&
-          slot.endTime === endTime
-      );
-
-      if (!isSlotAlreadyAdded) {
-        venue.operatingHours.push({
-          day: day,
-          startTime: startTime,
-          endTime: endTime,
-          timeslotId: timeslotId,
+      if (!venuesMap.has(venueId)) {
+        venuesMap.set(venueId, {
+          id: row.id,
+          tenant_id: row.tenant_id,
+          name: row.name,
+          status: row.status,
+          centerHead: row.centerHead,
+          address: row.address,
+          googleMapsUrl: row.googleMapsUrl,
+          timeSlots: [],
         });
       }
-    }
-  });
-  return Array.from(venuesMap.values());
-};
-
-//fetch venue data
-app.get("/api/venues-Details", async (req, res) => {
-  const sqlQuery = `
-SELECT
-    v.id,
-    v.name AS name,
-    v.status,
-    v.center_head AS "centerHead",
-    v.address,
-    v.google_url AS "googleMapsUrl",
-    ts.id AS "timeslotId",
-    ts.start_time AS "startTime",
-    ts.end_time AS "endTime",
-    d.day AS day
-FROM cd.venues_data v
-LEFT JOIN cd.venuetime_slots ts
-    ON ts.venue_id = v.id
-LEFT JOIN cd.venuetimeslot_days d
-    ON d.time_slot_id = ts.id
-WHERE v.active = true
-ORDER BY v.id, ts.id, d.day;
-`.trim();
-
-  try {
-    const result = await pool.query(sqlQuery);
-    const structuredData = formatVenueData(result.rows);
-
-    res.status(200).json(structuredData);
-  } catch (err) {
-    console.error("Database query error:", err);
+      if (row.timeslotId && row.day) {
+        const venue = venuesMap.get(venueId);
+        venue.timeSlots.push({
+          day: row.day,
+          startTime: row.startTime,
+          endTime: row.endTime,
+        });
+      }
+    });
+    const structuredVenues = Array.from(venuesMap.values());
+    res.status(200).json(structuredVenues);
+  } catch (error) {
+    console.error("Database Error during venue fetch:", error.message);
     res
       .status(500)
-      .json({ error: "Failed to retrieve venue data.", details: err.message });
-  }
-});
-
-///venus add the route here
-app.post("/api/venue-data/add", async (req, res) => {
-  const {
-    name,
-    centerHead,
-    address,
-    active = true,
-    timeSlots,
-    googleUrl,
-  } = req.body;
-
-  if (
-    !name ||
-    !centerHead ||
-    !address ||
-    !timeSlots ||
-    timeSlots.length === 0
-  ) {
-    return res
-      .status(400)
-      .json({ error: "Missing venue details or time slot data." });
-  }
-
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const venueQuery = `
-        INSERT INTO cd.venues_data
-        (name, center_head, address, active, google_url)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id;
-    `;
-    const venueValues = [name, centerHead, address, active, googleUrl || null];
-    const venueResult = await client.query(venueQuery, venueValues);
-    const venue_id = venueResult.rows[0].id;
-
-    const insertedSlots = [];
-
-    for (const slot of timeSlots) {
-      const timeSlotQuery = `
-          INSERT INTO cd.venuetime_slots
-          (venue_id, start_time, end_time, active)
-          VALUES ($1, $2, $3, $4)
-          RETURNING id;
-      `;
-      const timeSlotValues = [
-        venue_id,
-        slot.startTime,
-        slot.endTime,
-        slot.active || true,
-      ];
-      const timeSlotResult = await client.query(timeSlotQuery, timeSlotValues);
-      const time_slot_id = timeSlotResult.rows[0].id;
-
-      if (slot.days && slot.days.length > 0) {
-        for (const day of slot.days) {
-          const dayQuery = `
-              INSERT INTO cd.venuetimeslot_days
-              (time_slot_id, day, active)
-              VALUES ($1, $2, $3)
-              RETURNING id;
-          `;
-          const dayValues = [time_slot_id, day, slot.active || true];
-          await client.query(dayQuery, dayValues);
-        }
-      }
-      insertedSlots.push({ slot_id: time_slot_id, startTime: slot.startTime });
-    }
-
-    await client.query("COMMIT");
-
-    res.status(201).json({
-      message: "Venue and all associated time slots added successfully.",
-      venue_id: venue_id,
-      time_slots_inserted: insertedSlots.length,
-    });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("Transactional Venue Insert Error:", err);
-    res.status(500).json({
-      error: "Failed to complete venue insertion transaction.",
-      details: err.message,
-    });
+      .json({ error: "Failed to fetch venue data due to a server error." });
   } finally {
     client.release();
   }
 });
 
-//delete venue route
+
+// Apply the authentication middleware to secure the route
+app.post("/api/venue-add", authenticateToken, async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const { name, centerHead, address, googleUrl, timeSlots } = req.body;
+  const isActive = true;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const venueInsertQuery = `
+            INSERT INTO cd.venues_data
+                (tenant_id, name, center_head, address, active, google_url)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id;
+        `;
+    const venueResult = await client.query(venueInsertQuery, [
+      tenantId,
+      name,
+      centerHead,
+      address,
+      isActive,
+      googleUrl,
+    ]);
+    const venueId = venueResult.rows[0].id;
+    const uniqueSlots = {};
+    timeSlots.forEach((slot) => {
+      const key = `${slot.startTime}-${slot.endTime}`;
+      if (!uniqueSlots[key]) {
+        uniqueSlots[key] = {
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          days: [],
+        };
+      }
+      uniqueSlots[key].days.push(slot.day);
+    });
+
+    for (const key in uniqueSlots) {
+      const { startTime, endTime, days } = uniqueSlots[key];
+      const slotActive = true;
+
+      const slotInsertQuery = `
+                INSERT INTO cd.venuetime_slots
+                    (tenant_id, venue_id, start_time, end_time, active)
+                    VALUES ($1, $2, $3, $4, $5)
+                    RETURNING id;
+            `;
+      const slotResult = await client.query(slotInsertQuery, [
+        tenantId,
+        venueId,
+        startTime,
+        endTime,
+        slotActive,
+      ]);
+      const timeSlotId = slotResult.rows[0].id;
+
+      const dayActive = true;
+      for (const day of days) {
+        const dayInsertQuery = `
+                    INSERT INTO cd.venuetimeslot_days
+                        (tenant_id, time_slot_id, day, active)
+                        VALUES ($1, $2, $3, $4);
+                `;
+        await client.query(dayInsertQuery, [
+          tenantId,
+          timeSlotId,
+          day,
+          dayActive,
+        ]);
+      }
+    }
+
+    await client.query("COMMIT");
+    res.status(201).json({
+      message: "Venue and Time Slots inserted successfully.",
+      venue_id: venueId,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Transaction Error:", error.message);
+    res
+      .status(500)
+      .json({ error: "Failed to insert data due to a database error." });
+  } finally {
+    client.release();
+  }
+});
+
 // server.js (or wherever your route lives)
 app.delete("/api/venues-delete/:id", async (req, res) => {
   const venueId = Number(req.params.id);
@@ -1109,11 +1195,9 @@ app.delete("/api/venues-delete/:id", async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Venue deletion failed:", err.stack);
-    res
-      .status(500)
-      .json({
-        error: "Failed to delete venue due to a server or database error.",
-      });
+    res.status(500).json({
+      error: "Failed to delete venue due to a server or database error.",
+    });
   } finally {
     client.release();
   }
@@ -1187,10 +1271,84 @@ ORDER BY
 // Attendance Recording Endpoint
 // ---------------------------------------------
 app.post("/api/attendance", async (req, res) => {
-  const { playerId, attendanceDate, isPresent, coachId } = req.body;
-  if (!playerId || !attendanceDate || isPresent === undefined || !coachId) {
-    return res.status(400).json({ error: "Missing required attendance data." });
+  let { playerId, attendanceDate, isPresent, coachId } = req.body || {};
+
+  // Log incoming payload for diagnostics
+  console.debug("/api/attendance payload:", {
+    playerId,
+    attendanceDate,
+    isPresent,
+    coachId,
+  });
+
+  // Basic presence validation
+  if (
+    !playerId ||
+    !attendanceDate ||
+    isPresent === undefined ||
+    coachId === undefined
+  ) {
+    return res
+      .status(400)
+      .json({
+        error:
+          "Missing required attendance data. Required: playerId, attendanceDate, isPresent, coachId.",
+      });
   }
+
+  // Normalize boolean for isPresent
+  if (typeof isPresent === "string") {
+    isPresent = isPresent.toLowerCase() === "true";
+  } else {
+    isPresent = Boolean(isPresent);
+  }
+
+  // Validate attendanceDate (expecting YYYY-MM-DD or ISO string)
+  const parsedDate = new Date(attendanceDate);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return res
+      .status(400)
+      .json({
+        error:
+          "Invalid attendanceDate. Expected a valid date string (e.g., YYYY-MM-DD).",
+        received: attendanceDate,
+      });
+  }
+
+  // Resolve coachId to numeric DB id (allow numeric or textual identifiers)
+  let numericCoachId = Number(coachId);
+  if (isNaN(numericCoachId)) {
+    // attempt lookup by textual identifier or coach name
+    try {
+      const lookup = await pool.query(
+        `SELECT coach_id FROM cd.coaches_details WHERE coach_id::text = $1 OR coach_name = $1 LIMIT 1;`,
+        [String(coachId).trim()]
+      );
+      if (lookup.rows && lookup.rows.length > 0) {
+        numericCoachId = lookup.rows[0].coach_id;
+      } else {
+        return res
+          .status(400)
+          .json({
+            error: `Could not resolve coachId to a numeric id: ${coachId}`,
+          });
+      }
+    } catch (lookupErr) {
+      console.error("Error resolving coachId for attendance:", lookupErr);
+      return res
+        .status(500)
+        .json({
+          error: "Failed to resolve coach identifier.",
+          details: lookupErr.message,
+        });
+    }
+  }
+
+  // Normalize playerId to string form (player_id in DB is typically textual like 'FA2025...')
+  const normalizedPlayerId =
+    playerId === null || playerId === undefined
+      ? null
+      : String(playerId).trim();
 
   const queryText = `
     INSERT INTO cd.attendance_sheet 
@@ -1198,23 +1356,73 @@ app.post("/api/attendance", async (req, res) => {
     VALUES($1, $2, $3, $4)
     RETURNING *;
   `;
-  const queryValues = [playerId, attendanceDate, isPresent, coachId];
+  const queryValues = [
+    normalizedPlayerId,
+    parsedDate.toISOString().split("T")[0],
+    isPresent,
+    numericCoachId,
+  ];
+
+  console.debug("/api/attendance resolved values:", {
+    normalizedPlayerId,
+    attendanceDate: parsedDate.toISOString().split("T")[0],
+    isPresent,
+    numericCoachId,
+  });
   try {
-    const result = await pool.query(queryText, queryValues);
+    // Some schemas require an explicit attendance_id (no serial/default). Try to allocate one from a sequence if available.
+    let finalQueryText = queryText;
+    let finalQueryValues = queryValues;
+
+    // Attempt to fetch nextval from common sequence names
+    let attendanceId = null;
+    const seqCandidates = [
+      "cd.attendance_sheet_attendance_id_seq",
+      "attendance_sheet_attendance_id_seq",
+      "cd.attendance_id_seq",
+      "attendance_id_seq",
+    ];
+    for (const seqName of seqCandidates) {
+      try {
+        const seqRes = await pool.query(`SELECT nextval('${seqName}') as v`);
+        if (seqRes && seqRes.rows && seqRes.rows[0] && seqRes.rows[0].v) {
+          attendanceId = seqRes.rows[0].v;
+          console.debug(
+            `/api/attendance allocated attendanceId from sequence ${seqName}:`,
+            attendanceId
+          );
+          break;
+        }
+      } catch (seqErr) {
+        // ignore and try next
+      }
+    }
+
+    if (attendanceId !== null) {
+      finalQueryText = `
+        INSERT INTO cd.attendance_sheet (attendance_id, player_id, attendance_date, is_present, recorded_by_coach_id)
+        VALUES($1, $2, $3, $4, $5)
+        RETURNING *;
+      `;
+      finalQueryValues = [attendanceId, ...queryValues];
+    }
+
+    const result = await pool.query(finalQueryText, finalQueryValues);
     res.status(201).json({
       message: "Attendance successfully recorded.",
       data: result.rows[0],
     });
   } catch (err) {
-    console.error("Error executing query", err.stack);
-    if (err.code === "22P02") {
+    console.error("Error executing attendance insert query:", err);
+    if (err && err.code === "22P02") {
       return res.status(400).json({
-        error: "Data type mismatch: Coach ID must be a number.",
-        details: `Attempted value: ${coachId}`,
+        error:
+          "Data type mismatch when inserting attendance. Check numeric fields.",
+        details: err.message,
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to record attendance due to server error.",
       details: err.message,
     });
@@ -1291,107 +1499,150 @@ app.get("/api/player-details/:email", authenticateToken, async (req, res) => {
 app.use(express.json());
 
 //fech data registrations API and code
-app.get("/api/registrations", async (req, res) => {
-  const sqlQuery = `
-    SELECT
-      regist_id,
-      name,
-      phone_number,
-      email_id,
-      address,
-      age,
-      application_date,
-      parent_name,
-      Status,
-      active
-    FROM cd.registrations_details
-    ORDER BY regist_id DESC;
-  `;
+// This route is protected by the authenticateUser middleware
+app.get("/api/registrations", authenticateToken, async (req, res) => {
+  // Prefer tenant_id set by middleware, but fall back to common locations
+  const tenant_id =
+    req.tenant_id ||
+    req.user?.tenant_id ||
+    req.user?.id ||
+    req.body?.tenant_id ||
+    req.headers["x-tenant-id"];
 
-  try {
-    const client = await pool.connect();
-    const result = await client.query(sqlQuery);
-    client.release();
-
-    res.status(200).json({
-      success: true,
-      data: result.rows,
-      count: result.rowCount,
-    });
-  } catch (err) {
-    console.error("Error executing query:", err);
-    res.status(500).json({ error: "Database query failed." });
+  if (!tenant_id) {
+    return res
+      .status(403)
+      .json({ error: "Access denied. Tenant ID not resolved." });
   }
-});
-
-//Endpoint for Bulk Uploading New Registrations from Excel
-app.post("/api/registrations/bulk-upload", async (req, res) => {
-  const registrations = req.body;
-
-  if (!Array.isArray(registrations) || registrations.length === 0) {
-    return res.status(400).json({ error: "Invalid or empty array" });
-  }
-  console.log(
-    `Received ${registrations.length} registrations for bulk upload.`
-  );
-  const columns = [
-    "name",
-    "phone_number",
-    "email_id",
-    "address",
-    "age",
-    "application_date",
-    "parent_name",
-  ];
-
-  const values = [];
-  const placeholders = registrations
-    .map((reg, index) => {
-      const base = index * columns.length + 1;
-
-      values.push(
-        reg.name || null,
-        reg.phone_number || null,
-        reg.email_id || null,
-        reg.address || null,
-        reg.age !== undefined && reg.age !== null ? reg.age : null,
-        reg.application_date || null,
-        reg.parent_name || null
-      );
-
-      return `(${columns.map((_, i) => `$${base + i}`).join(",")})`;
-    })
-    .join(",");
-
-  const sql = `
-        INSERT INTO cd.registrations_details
-        (${columns.join(",")})
-        VALUES ${placeholders}
-        ON CONFLICT (email_id) DO NOTHING
-        RETURNING *;
+  const queryText = `
+        SELECT
+            tenant_id,
+            regist_id,
+            name,
+            phone_number,
+            email_id,
+            address,
+            age,
+            application_date,
+            parent_name,
+            Status,
+            active
+        FROM cd.registrations_details 
+        WHERE tenant_id = $1
+        ORDER BY regist_id DESC;
     `;
 
-  console.log("Generated SQL (Snippet):", sql.substring(0, 100) + "...");
-
+  const values = [tenant_id];
   try {
-    const result = await pool.query(sql, values);
-    console.log(
-      `Database query successful. Inserted: ${result.rowCount} rows.`
-    );
-    return res.status(201).json({
+    console.log(`Fetching registrations for tenant: ${tenant_id}`);
+    const result = await pool.query(queryText, values);
+
+    return res.status(200).json({
       success: true,
-      inserted: result.rowCount,
-      totalRecordsAttempted: registrations.length,
-      newRecords: result.rows,
+      tenant_id: tenant_id,
+      count: result.rowCount,
+      registrations: result.rows,
     });
   } catch (err) {
-    console.error("!!! DB ERROR (Bulk Insert Failed) !!!", err);
+    console.error("!!! DB ERROR (Fetch Failed) !!!", err);
     return res.status(500).json({
-      error: "Database insert failed",
+      error: "Failed to fetch registrations.",
       details: err.message,
     });
   }
 });
+
+//Endpoint for Bulk Uploading New Registrations from Excel
+app.post(
+  "/api/registrations/bulk-upload",
+  authenticateToken,
+  async (req, res) => {
+    const registrations = req.body;
+    const tenant_id =
+      req.user?.tenant_id ||
+      req.body?.tenant_id ||
+      req.headers["x-tenant-id"] ||
+      null;
+
+    if (!tenant_id) {
+      console.error(
+        "Bulk upload rejected: Tenant ID missing (token/body/header)"
+      );
+      return res
+        .status(403)
+        .json({ error: "Tenant ID missing. Check authentication middleware." });
+    }
+
+    if (!Array.isArray(registrations) || registrations.length === 0) {
+      return res.status(400).json({ error: "Invalid or empty array" });
+    }
+
+    console.log(
+      `Received ${registrations.length} registrations for bulk upload for tenant ${tenant_id}.`
+    );
+
+    const allColumns = [
+      "tenant_id",
+      "name",
+      "phone_number",
+      "email_id",
+      "address",
+      "age",
+      "application_date",
+      "parent_name",
+    ];
+
+    let values = [];
+    const columnCount = allColumns.length;
+
+    const placeholders = registrations
+      .map((reg, index) => {
+        const base = index * columnCount + 1;
+
+        values.push(
+          tenant_id,
+          reg.name || null,
+          reg.phone_number || null,
+          reg.email_id || null,
+          reg.address || null,
+          reg.age !== undefined && reg.age !== null ? reg.age : null,
+          reg.application_date || null,
+          reg.parent_name || null
+        );
+        return `(${allColumns.map((_, i) => `$${base + i}`).join(",")})`;
+      })
+      .join(",");
+    const sql = `
+        INSERT INTO cd.registrations_details
+        (${allColumns.join(",")}) 
+        VALUES ${placeholders}
+        ON CONFLICT (tenant_id, email_id) DO NOTHING
+        RETURNING *;
+    `;
+
+    console.log("Generated SQL (Snippet):", sql.substring(0, 100) + "...");
+
+    try {
+      const result = await pool.query(sql, values);
+      console.log(
+        `Database query successful. Inserted: ${result.rowCount} rows.`
+      );
+      return res.status(201).json({
+        success: true,
+        tenant_id: tenant_id,
+        inserted: result.rowCount,
+        totalRecordsAttempted: registrations.length,
+        newRecords: result.rows,
+      });
+    } catch (err) {
+      console.error("!!! DB ERROR (Bulk Insert Failed) !!!", err);
+      return res.status(500).json({
+        error: "Database insert failed",
+        details: err.message,
+      });
+    }
+  }
+);
 
 //updated the reaject and approved Registrations Excell
 app.put("/api/registrations/status/:id", async (req, res) => {
@@ -1417,12 +1668,10 @@ app.put("/api/registrations/status/:id", async (req, res) => {
     client.release();
 
     if (result.rowCount === 0) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: `Registration with ID ${id} not found.`,
-        });
+      return res.status(404).json({
+        success: false,
+        message: `Registration with ID ${id} not found.`,
+      });
     }
 
     res.status(200).json({
@@ -1435,11 +1684,9 @@ app.put("/api/registrations/status/:id", async (req, res) => {
   }
 });
 
-
-
 //Delete the Registrations Serever.js and API
 app.delete("/api/registrations/:id", async (req, res) => {
-  const { id } = req.params; 
+  const { id } = req.params;
   if (!id) {
     return res.status(400).json({ error: "Registration ID (id) is required." });
   }
@@ -1455,7 +1702,7 @@ app.delete("/api/registrations/:id", async (req, res) => {
         .status(404)
         .json({ message: `Registration with ID ${id} not found.` });
     }
-    res.status(204).send();     
+    res.status(204).send();
   } catch (error) {
     console.error("Error deleting registration:", error.stack);
     res
@@ -1484,13 +1731,14 @@ app.get("/api/coachdata/:coachId", async (req, res) => {
 // B. Route for Players: /api/coachplayers/:coachId/players
 app.get("/api/coachplayers/:coachId/players", async (req, res) => {
   const { coachId } = req.params;
-
   try {
     const query = `
       SELECT 
     p.player_id,
     p.name,
-	p.age, p.category, p.active, 
+    p.age,
+    p.category,
+    p.active,
     ROUND(
         (COUNT(a.attendance_id) FILTER (WHERE a.is_present = TRUE)::decimal 
         / NULLIF(COUNT(a.attendance_id), 0)) * 100, 2
@@ -1502,9 +1750,9 @@ LEFT JOIN
 ON 
     p.player_id = a.player_id
 WHERE 
-    p.coach_id = $1      
+    p.coach_id = $1
 GROUP BY 
-    p.player_id, p.name
+    p.player_id, p.name, p.age, p.category, p.active
 ORDER BY 
     p.name;
     `;
@@ -1512,12 +1760,10 @@ ORDER BY
     res.json(result.rows);
   } catch (error) {
     console.error("Error fetching coach players:", error);
-    res
-      .status(500)
-      .send({
-        error: "Internal Server Error (Coach Players)",
-        details: error.message,
-      });
+    res.status(500).send({
+      error: "Internal Server Error (Coach Players)",
+      details: error.message,
+    });
   }
 });
 
@@ -1525,14 +1771,25 @@ ORDER BY
 app.get("/api/sessions-data/:coachId", async (req, res) => {
   try {
     const { coachId } = req.params;
-    const numericCoachId = parseInt(coachId, 10);
 
-    if (isNaN(numericCoachId) || numericCoachId <= 0) {
+    let finalCoachId = coachId;
+    if (typeof coachId === "string" && coachId.toUpperCase().startsWith("CO")) {
+      finalCoachId = coachId.substring(2);
+    }
+
+    if (!finalCoachId || finalCoachId.trim().length === 0) {
       return res
         .status(400)
         .json({ message: "Invalid or missing coach ID parameter." });
     }
+    const numericCoachId = parseInt(finalCoachId, 10);
 
+    if (isNaN(numericCoachId)) {
+      return res
+        .status(400)
+        .json({ message: "Coach ID must resolve to a valid number." });
+    }
+    console.log(`Fetching sessions for numeric coach ID: ${numericCoachId}`);
     const queryText = `
       SELECT 
         session_id,
@@ -1544,7 +1801,7 @@ app.get("/api/sessions-data/:coachId", async (req, res) => {
         status,
         coach_id
       FROM cd.training_sessions
-      WHERE coach_id = $1  
+      WHERE coach_id = $1 
       ORDER BY session_id DESC;
     `;
     const result = await pool.query(queryText, [numericCoachId]);
@@ -1562,7 +1819,6 @@ app.get("/api/sessions-data/:coachId", async (req, res) => {
   }
 });
 
-//add the coach session insert the data in session coach
 // Assuming 'app' is your Express app instance:
 app.post("/api/sessions-insert", async (req, res) => {
   try {
@@ -1577,25 +1833,61 @@ app.post("/api/sessions-insert", async (req, res) => {
       status,
       active,
     } = req.body ?? {};
-
-    if (!coach_id || isNaN(Number(coach_id))) {
+    if (!coach_id) {
       return res.status(400).json({ error: "Invalid or missing coach_id" });
     }
-    coach_id = Number(coach_id);
+    let resolvedCoachId = Number(coach_id);
 
+    if (isNaN(resolvedCoachId)) {
+      const lookupVal = String(coach_id).trim();
+      const lookupQry = `SELECT coach_id FROM cd.coaches_details WHERE coach_id = $1 OR coach_name = $1 LIMIT 1;`;
+      try {
+        const lookupRes = await pool.query(lookupQry, [lookupVal]);
+        if (lookupRes.rows && lookupRes.rows.length > 0) {
+          const dbCoachId = lookupRes.rows[0].coach_id;
+          const numericPart = String(dbCoachId).replace(/\D/g, "");
+          resolvedCoachId = Number(numericPart);
+          if (isNaN(resolvedCoachId)) {
+            console.error(`DB returned non-numeric ID for coach: ${dbCoachId}`);
+            return res.status(400).json({
+              error: `Database returned invalid numeric coach_id for identifier: ${lookupVal}`,
+            });
+          }
+        } else {
+          return res.status(400).json({
+            error: `Could not resolve numeric coach_id from provided identifier: ${lookupVal}`,
+          });
+        }
+      } catch (lookupErr) {
+        console.error("Error resolving coach identifier:", lookupErr);
+        return res
+          .status(500)
+          .json({ error: "Failed to resolve coach identifier" });
+      }
+    }
+
+    coach_id = Number(resolvedCoachId);
+    if (isNaN(coach_id)) {
+      console.error(
+        "Final coach_id is NaN before DB query. Initial value:",
+        req.body.coach_id
+      );
+      return res
+        .status(400)
+        .json({ error: "Resolved coach_id is not a valid number." });
+    }
     if (!coach_name || typeof coach_name !== "string") {
       return res.status(400).json({ error: "Invalid or missing coach_name" });
     }
-
     if (!day_of_week || typeof day_of_week !== "string") {
       return res.status(400).json({ error: "Invalid or missing day_of_week" });
     }
-
     if (!start_time || !end_time) {
       return res
         .status(400)
         .json({ error: "start_time and end_time are required" });
     }
+
     status =
       typeof status === "string" && status.trim() !== ""
         ? status.trim()
@@ -1643,12 +1935,10 @@ app.put("/api/sessions-updated/:session_id", async (req, res) => {
         "Attempted update with invalid session ID format:",
         sessionIdParam
       );
-      return res
-        .status(400)
-        .json({
-          error: "Invalid session ID format. ID must be a positive integer.",
-          details: `Received ID: ${sessionIdParam}`,
-        });
+      return res.status(400).json({
+        error: "Invalid session ID format. ID must be a positive integer.",
+        details: `Received ID: ${sessionIdParam}`,
+      });
     }
 
     const {
@@ -1712,11 +2002,9 @@ app.delete("/api/sessions/:session_id", async (req, res) => {
         "Attempted delete with invalid session ID format:",
         sessionIdParam
       );
-      return res
-        .status(400)
-        .json({
-          error: "Invalid session ID format. ID must be a positive integer.",
-        });
+      return res.status(400).json({
+        error: "Invalid session ID format. ID must be a positive integer.",
+      });
     }
 
     const queryText = `

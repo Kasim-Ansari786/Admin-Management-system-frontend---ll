@@ -24,40 +24,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
-
-// New imports for the multi-select UI
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 import {
-  Users,
-  UserPlus,
   MapPin,
   Clock,
-  UserCheck,
-  UserX,
   X,
-  Check,
-  Home,
   ChevronLeft, // New import for pagination
   ChevronRight, // New import for pagination
 } from "lucide-react";
 // Ensure all API functions are imported
 import {
-  GetagssignDetails,
-  GetCoachDetailslist,
-  AssignCoachupdated,
   addVenueData,
   fetchVenuesdetails,
   deleteVenue,
+  GetagssignDetails,
+  GetCoachDetailslist,
 } from "../../../api";
 
-// --- State Definitions for Operating Hours ---
 const weekDays = [
   "Monday",
   "Tuesday",
@@ -69,13 +52,9 @@ const weekDays = [
 ];
 
 const initialTimeSlot = { startTime: "", endTime: "" };
-
-// Initialize operatingHours as an array with an entry for each day.
 const initialOperatingHours = weekDays.map((day) => ({
   day: day,
-  // FIX 1: Default status to "Enter Hours" to immediately show time inputs
   status: "Enter Hours",
-  // FIX 2: Initialize with one empty slot
   slots: [{ ...initialTimeSlot }],
 }));
 
@@ -86,9 +65,6 @@ const initialVenueForm = {
   googleMapsUrl: "",
   operatingHours: initialOperatingHours,
 };
-// --- END State Definitions ---
-
-// --- Pagination Constant ---
 const VENUES_PER_PAGE = 5;
 
 export default function StaffDashboard() {
@@ -101,18 +77,12 @@ export default function StaffDashboard() {
 
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [selectedCoach, setSelectedCoach] = useState(null);
-  const [isPlayerPopoverOpen, setIsPlayerPopoverOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  
-  // --- NEW STATES FOR VENUE MANAGEMENT ---
   const [searchTermVenue, setSearchTermVenue] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  // --- END NEW STATES ---
 
   useEffect(() => {
-    // API DATA FETCHING
     const fetchData = async () => {
-      // 1. Fetch Players
       try {
         const playersData = await GetagssignDetails();
         setPlayers(playersData?.players || []);
@@ -124,8 +94,6 @@ export default function StaffDashboard() {
           variant: "destructive",
         });
       }
-
-      // 2. Fetch Coaches (Handle 404 error)
       try {
         const coachData = await GetCoachDetailslist();
 
@@ -153,27 +121,16 @@ export default function StaffDashboard() {
     };
 
     fetchData();
-
-    // 3. Fetch Venues
     async function loadVenues() {
       try {
         const fetchedVenues = await fetchVenuesdetails();
-
-        // FIX 3: Normalize operating hours data for fetched venues
         const normalizedVenues = fetchedVenues.map((v) => {
-          // Determine the source of operating hours array
           const rawHours = v.timeSlots || v.operatingHours || [];
-
-          // Explicitly normalize the slot keys to ensure camelCase for display,
-          // checking for potential snake_case (start_time/end_time) from the API.
           const operatingHours = rawHours
             .map((slot) => ({
               day: slot.day,
-              // ***** BACKEND FIX: Check for multiple common API keys for time *****
               startTime: slot.startTime || slot.start_time || slot.start || "",
               endTime: slot.endTime || slot.end_time || slot.end || "",
-              // ******************************************************************
-              // Filter out slots that are completely empty
             }))
             .filter((slot) => slot.day && (slot.startTime || slot.endTime));
 
@@ -185,7 +142,6 @@ export default function StaffDashboard() {
 
         setVenues(normalizedVenues);
       } catch (e) {
-        // This is where the 500 error is caught
         console.error("Failed to fetch venues from API", e);
         toast({
           title: "Venue Load Error",
@@ -205,17 +161,13 @@ export default function StaffDashboard() {
       newOperatingHours[dayIndex].status = status;
 
       if (status === "Closed") {
-        // If status is Closed, clear all slots
         newOperatingHours[dayIndex].slots = [];
       } else if (
-        // If switching to Open Day and there are no slots, add the default first slot.
         status === "Open Day" &&
         newOperatingHours[dayIndex].slots.length === 0
       ) {
         newOperatingHours[dayIndex].slots.push({ ...initialTimeSlot });
       }
-      // Note: No change needed for "Enter Hours" here, as it's not selectable.
-
       return { ...prev, operatingHours: newOperatingHours };
     });
   };
@@ -223,7 +175,6 @@ export default function StaffDashboard() {
   const handleAddTimeSlot = (dayIndex) => {
     setVenueForm((prev) => {
       const newOperatingHours = [...prev.operatingHours];
-      // When a slot is added, ensure status is set to "Open Day" if it's the initial "Enter Hours"
       if (newOperatingHours[dayIndex].status === "Enter Hours") {
         newOperatingHours[dayIndex].status = "Open Day";
       }
@@ -240,7 +191,6 @@ export default function StaffDashboard() {
       ].slots.filter((_, i) => i !== slotIndex);
 
       if (newOperatingHours[dayIndex].slots.length === 0) {
-        // FIX 4: Change status to "Closed" when the last slot is removed.
         newOperatingHours[dayIndex].status = "Closed";
       }
 
@@ -252,8 +202,6 @@ export default function StaffDashboard() {
     setVenueForm((prev) => {
       const newOperatingHours = [...prev.operatingHours];
       if (newOperatingHours[dayIndex].slots[slotIndex]) {
-        // When a user starts typing/selecting time, change the status from
-        // default "Enter Hours" to "Open Day" to confirm user intent.
         if (newOperatingHours[dayIndex].status === "Enter Hours") {
           newOperatingHours[dayIndex].status = "Open Day";
         }
@@ -265,8 +213,6 @@ export default function StaffDashboard() {
 
   const handleSubmitVenue = async (e) => {
     e.preventDefault();
-
-    // FIX A: Required fields validation
     if (
       !venueForm.name ||
       !venueForm.centerHead ||
@@ -282,26 +228,20 @@ export default function StaffDashboard() {
       return;
     }
 
-    // Validation for Operating Hours
     let hasValidSlots = false;
     let hasIncompleteSlot = false;
     let hasOpenDayWithNoSlots = false;
     const submissionSlots = [];
 
     venueForm.operatingHours.forEach((dayEntry) => {
-      // Check for statuses that imply the day is open for business
       const isDayOpenStatus =
         dayEntry.status === "Open Day" || dayEntry.status === "Enter Hours";
 
       if (isDayOpenStatus) {
         if (dayEntry.slots.length === 0) {
-          // This means the user left it as "Open Day" but cleared all slots.
-          // We'll treat this as "Closed" for submission but flag the form inconsistency.
           hasOpenDayWithNoSlots = true;
         }
-
         dayEntry.slots.forEach((slot) => {
-          // Check for incomplete slots (one field filled, but not the other)
           if (
             (slot.startTime && !slot.endTime) ||
             (!slot.startTime && slot.endTime)
@@ -309,7 +249,6 @@ export default function StaffDashboard() {
             hasIncompleteSlot = true;
           }
 
-          // Only add fully completed slots to the submission
           if (slot.startTime && slot.endTime) {
             hasValidSlots = true;
             submissionSlots.push({
@@ -320,12 +259,8 @@ export default function StaffDashboard() {
           }
         });
       }
-
-      // IMPORTANT: If status is explicitly "Closed", no slots will be in dayEntry.slots,
-      // and no slots will be pushed to submissionSlots, which is the desired behavior.
     });
 
-    // FIX B: Incomplete slot validation
     if (hasIncompleteSlot) {
       toast({
         title: "Validation Error",
@@ -335,14 +270,10 @@ export default function StaffDashboard() {
       });
       return;
     }
-
-    // FIX C: Day status inconsistency validation
-    // This checks if the user explicitly set a day to "Open Day" but then removed all slots.
     if (
       hasOpenDayWithNoSlots &&
       venueForm.operatingHours.some((d) => d.status === "Open Day")
     ) {
-      // Only error if the user has an explicit 'Open Day' status with no slots.
       toast({
         title: "Validation Error",
         description: "An 'Open Day' must have at least one valid time slot.",
@@ -351,7 +282,6 @@ export default function StaffDashboard() {
       return;
     }
 
-    // FIX D: Ensure at least one actual, valid operating hour is entered for the entire venue
     if (submissionSlots.length === 0) {
       toast({
         title: "Validation Error",
@@ -366,8 +296,8 @@ export default function StaffDashboard() {
         name: venueForm.name,
         centerHead: venueForm.centerHead,
         address: venueForm.address,
-        googleUrl: venueForm.googleMapsUrl, // API payload key
-        timeSlots: submissionSlots, // Use the filtered, validated slots
+        googleUrl: venueForm.googleMapsUrl, 
+        timeSlots: submissionSlots, 
       };
 
       const apiResponse = await addVenueData(dataToSubmit);
@@ -378,7 +308,7 @@ export default function StaffDashboard() {
         centerHead: venueForm.centerHead,
         address: venueForm.address,
         googleMapsUrl: venueForm.googleMapsUrl,
-        operatingHours: submissionSlots, // This retains the correct camelCase structure for immediate display
+        operatingHours: submissionSlots, 
       };
 
       setVenues((prevVenues) => [...prevVenues, newVenue]);
@@ -389,9 +319,8 @@ export default function StaffDashboard() {
 
       setVenueForm(initialVenueForm);
       setShowVenueForm(false);
-      // Reset pagination to first page after adding a new venue
       setCurrentPage(1); 
-      setSearchTermVenue(""); // Clear search to see the new venue
+      setSearchTermVenue("");
     } catch (error) {
       console.error("Venue submission failed:", error);
       toast({
@@ -414,7 +343,6 @@ export default function StaffDashboard() {
         description: result.message || `Venue ID ${id} successfully removed.`,
         variant: "success",
       });
-      // Re-evaluate page number after deletion
       if (
         (updated.length % VENUES_PER_PAGE === 0) &&
         (currentPage > Math.ceil(updated.length / VENUES_PER_PAGE)) &&
@@ -487,12 +415,9 @@ export default function StaffDashboard() {
     const lowercasedSearchTerm = searchTerm.toLowerCase();
 
     return players.filter((player) => {
-      // Search by player name
       const nameMatch = player.name
         .toLowerCase()
         .includes(lowercasedSearchTerm);
-
-      // Search by local ID (id) or API ID (player_id)
       const idMatch = player.id
         ?.toString()
         .toLowerCase()
@@ -586,15 +511,12 @@ export default function StaffDashboard() {
       });
     }
 
-    // Reset selection and search term after attempts
     setSelectedPlayers([]);
     setSelectedCoach(null);
     setSearchTerm("");
   };
 
-  // --- NEW LOGIC FOR VENUE FILTERING AND PAGINATION ---
   const { paginatedVenues, totalPages } = useMemo(() => {
-    // 1. Filtering
     const lowercasedSearchTerm = searchTermVenue.toLowerCase();
     const filtered = venues.filter(
       (v) =>
@@ -603,311 +525,23 @@ export default function StaffDashboard() {
         v.address.toLowerCase().includes(lowercasedSearchTerm)
     );
 
-    // 2. Pagination Calculation
     const total = filtered.length;
     const pages = Math.ceil(total / VENUES_PER_PAGE);
 
-    // Correct the current page if it's out of bounds after filtering
     const pageIndex = Math.max(0, currentPage - 1);
     const start = pageIndex * VENUES_PER_PAGE;
     const end = start + VENUES_PER_PAGE;
-
-    // 3. Slicing
     const paginated = filtered.slice(start, end);
-
-    // If the current page is now empty after filtering, go back one page (unless it's the first page)
     if (paginated.length === 0 && currentPage > 1) {
         setCurrentPage(Math.max(1, currentPage - 1));
     }
-
     return { paginatedVenues: paginated, totalPages: pages };
   }, [venues, searchTermVenue, currentPage]);
-  // --- END NEW LOGIC ---
 
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="bg-primary text-primary-foreground p-6 rounded-xl flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold">Staff Administration</h1>
-          <p className="opacity-80">
-            Complete academy management and oversight
-          </p>
-        </div>
-        <Button
-          variant="secondary"
-          className="text-primary hover:bg-white/90"
-          onClick={() => {
-            console.log("Navigating to Home Page");
-            window.location.href = "/staff";
-          }}
-        >
-          <Home className="mr-2 h-4 w-4" />
-          Home
-        </Button>
-      </div>
-
-      <Tabs defaultValue="Assigned" className="space-y-4">
-        <TabsList className="grid grid-cols-2 w-full md:w-fit">
-          <TabsTrigger value="Assigned">Assign Players</TabsTrigger>
-          <TabsTrigger value="venues">Venue Management</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="Assigned" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Assign Coach to Player</CardTitle>
-              <CardDescription>
-                Select a coach and one or more players to make an assignment.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                {/* Select Coach */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground">
-                    Select Coach
-                  </Label>
-                  <Select
-                    value={
-                      selectedCoach !== null ? selectedCoach.toString() : ""
-                    }
-                    onValueChange={(value) => setSelectedCoach(Number(value))}
-                  >
-                    <SelectTrigger className="border-border">
-                      <SelectValue placeholder="Choose a coach" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {coaches.map((coach) => (
-                        <SelectItem
-                          key={coach.coach_id}
-                          value={coach.coach_id.toString()}
-                        >
-                          {coach.coach_name} - {coach.category || "N/A"}
-                        </SelectItem>
-                      ))}
-
-                      {coaches.length === 0 && (
-                        <SelectItem value="no-coaches" disabled>
-                          No coaches found (API likely failed)
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {/* Select Player(s) with Checkbox UI */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground">
-                    Select Player(s)
-                  </Label>
-
-                  <Popover
-                    open={isPlayerPopoverOpen}
-                    onOpenChange={(open) => {
-                      setIsPlayerPopoverOpen(open);
-                      // Clear search when closing popover via outside click/esc
-                      if (!open) setSearchTerm("");
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={isPlayerPopoverOpen}
-                        className="w-full justify-between border-border"
-                      >
-                        <span className="truncate">
-                          {getSelectedPlayerDisplay()}
-                        </span>
-                        <Check className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-
-                    <PopoverContent className="w-[450px] p-0">
-                      {/* FIX: Search Input for Players - now binds to state and triggers filtering */}
-                      <div className="p-2 border-b">
-                        <Input
-                          placeholder="Search player name or ID..."
-                          className="border-0 focus-visible:ring-0"
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                      </div>
-
-                      {/* Player List with Checkboxes in ScrollArea */}
-                      <ScrollArea className="h-[300px] p-4">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                          {filteredPlayers.length === 0 ? (
-                            <div className="col-span-2 text-center text-sm opacity-70 py-4">
-                              {searchTerm
-                                ? `No players found matching "${searchTerm}".`
-                                : "No players found."}
-                            </div>
-                          ) : (
-                            filteredPlayers.map((player) => (
-                              <div
-                                key={player.id}
-                                className="flex items-center space-x-2 py-1"
-                              >
-                                <Checkbox
-                                  id={`player-${player.id}`}
-                                  checked={selectedPlayers.includes(player.id)}
-                                  onCheckedChange={() =>
-                                    handlePlayerCheckboxChange(player.id)
-                                  }
-                                />
-                                <Label
-                                  htmlFor={`player-${player.id}`}
-                                  className="text-sm font-normal cursor-pointer flex-1"
-                                >
-                                  {player.name} (Coach: {player.coach_name}){" "}
-                                </Label>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </ScrollArea>
-
-                      {/* Footer with Clear All and Apply Filters buttons */}
-                      <div className="flex justify-between items-center p-2 border-t">
-                        <Button
-                          variant="ghost"
-                          onClick={handleClearAllPlayers}
-                          className="text-sm text-muted-foreground"
-                          disabled={selectedPlayers.length === 0}
-                        >
-                          CLEAR ALL
-                        </Button>
-                        <Button
-                          onClick={handleApplyPlayers}
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                        >
-                          Assign Coach
-                        </Button>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-
-              <Button
-                onClick={handleAssign}
-                disabled={
-                  selectedPlayers.length === 0 ||
-                  selectedCoach === null ||
-                  players.length === 0 ||
-                  coaches.length === 0
-                }
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                Assign Player(s)
-              </Button>
-
-              {/* Display Unassigned/Assigned Count */}
-              <div className="flex justify-between text-sm pt-4 border-t">
-                <p>
-                  Unassigned Players:{" "}
-                  <span className="font-bold text-red-500">
-                    {unassignedPlayers.length}
-                  </span>
-                </p>
-                <p>
-                  Assigned Players:{" "}
-                  <span className="font-bold text-green-600">
-                    {assignedPlayers.length}
-                  </span>
-                </p>
-                <p>
-                  Total Players:{" "}
-                  <span className="font-bold">{players.length}</span>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* --- Player List Section --- */}
-          <Card>
-            <CardHeader>
-              <CardTitle>All Player Details</CardTitle>
-              <CardDescription>
-                A complete list of all players and their current coach
-                assignments.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                {players.length === 0 ? (
-                  <div className="text-center p-6 opacity-70 border rounded">
-                    <Users className="mx-auto mb-2 h-6 w-6" />
-                    No player data loaded. Please check API connection.
-                  </div>
-                ) : (
-                  players.map((player) => {
-                    const isAssigned =
-                      player.coachId !== null && player.coachId !== undefined;
-                    const coachName = getCoachName(player.coachId);
-
-                    return (
-                      <div
-                        key={player.id}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div
-                            className={`p-2 rounded-full ${
-                              isAssigned
-                                ? "bg-green-100 text-green-600"
-                                : "bg-red-100 text-red-600"
-                            }`}
-                          >
-                            {isAssigned ? (
-                              <UserCheck className="h-5 w-5" />
-                            ) : (
-                              <UserX className="h-5 w-5" />
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-base">
-                              {player.name}
-                            </p>
-                            <p className="text-sm opacity-70">
-                              Player ID: {player.player_id || "N/A"} | Category:{" "}
-                              {player.category || "N/A"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          {isAssigned ? (
-                            <>
-                              <Badge className="bg-green-500 hover:bg-green-500/90">
-                                Assigned
-                              </Badge>
-                              <p className="text-sm font-medium mt-1">
-                                Coach: {coachName}
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <Badge variant="destructive">Unassigned</Badge>
-                              <p className="text-sm opacity-50 mt-1">
-                                Ready for assignment
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          {/* --- End Player List Section --- */}
-        </TabsContent>
-
-        <TabsContent value="venues">
+    <div className="space-y-6 p-4 md:p-6">     
+      <Tabs defaultValue="Assigned" className="space-y-4"> 
           <Card>
             <CardHeader className="flex flex-row justify-between items-start">
               <div>
@@ -926,15 +560,12 @@ export default function StaffDashboard() {
             </CardHeader>
 
             <CardContent>
-              {/* VENUE ADD FORM */}
 
               {showVenueForm && (
                 <form
                   onSubmit={handleSubmitVenue}
                   className="space-y-4 p-4 border rounded mb-6"
                 >
-                  {/* Center Name, Center Head inputs */}
-
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <Label>Center Name *</Label>
@@ -1372,7 +1003,7 @@ export default function StaffDashboard() {
                 )}
               </div>
 
-              {/* --- PAGINATION CONTROLS --- */}
+           
               {totalPages > 1 && (
                 <div className="flex justify-between items-center mt-6 p-3 border-t">
                   <p className="text-sm opacity-70">
@@ -1402,8 +1033,7 @@ export default function StaffDashboard() {
               )}
               {/* --- END PAGINATION CONTROLS --- */}
             </CardContent>
-          </Card>
-        </TabsContent>
+          </Card>      
       </Tabs>
     </div>
   );

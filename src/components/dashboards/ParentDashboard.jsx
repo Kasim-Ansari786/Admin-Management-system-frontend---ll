@@ -1,5 +1,3 @@
-// ParentDashboard.jsx
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -190,15 +188,15 @@ useEffect(() => {
       <Card className="shadow-card">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                {childData?.name}
-              </CardTitle>
-              <CardDescription>
-                Player ID: {childData?.player_id}
-              </CardDescription>
-            </div>
+              {/* <div>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  {childData?.name}
+                </CardTitle>
+                <CardDescription>
+                  Player ID: {childData?.player_id}
+                </CardDescription>
+              </div> */}
             <Badge
               variant="secondary"
               className="bg-success text-success-foreground"
@@ -208,7 +206,15 @@ useEffect(() => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-2 gap-2">
+           <div className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              <div>
+                <p className="text-xs text-muted-foreground">Name</p>
+                <p className="font-medium"> {childData?.name}</p>
+                <p className="font-medium"> Player ID: {childData?.player_id}</p>
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <div>
@@ -216,27 +222,27 @@ useEffect(() => {
                 <p className="font-medium">{childData?.age} years</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            {/* <div className="flex items-center gap-2">
               <Trophy className="h-4 w-4 text-muted-foreground" />
               <div>
                 <p className="text-xs text-muted-foreground">Position</p>
                 <p className="font-medium">{childData?.position}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
+            </div> */}
+            {/* <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-muted-foreground" />
               <div>
                 <p className="text-xs text-muted-foreground">Center</p>
                 <p className="font-medium">{childData?.center}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
+            </div> */}
+            {/* <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <div>
                 <p className="text-xs text-muted-foreground">Batch</p>
                 <p className="font-medium text-xs">{childData?.batch}</p>
               </div>
-            </div>
+            </div> */}
           </div>
         </CardContent>
       </Card>

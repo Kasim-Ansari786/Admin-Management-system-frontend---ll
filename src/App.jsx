@@ -18,6 +18,9 @@ import EditPlayers from "./components/dashboards/EditPlayers";
 import Venues from "@/components/dashboards/Venues";
 import { AssignStudents } from "@/components/dashboards/AssignStudents";
 import CoachDetails from "./pages/CoachDetails";
+// import loginForm from "@/components/auth/LoginForm";
+
+import AssignST from "./pages/AssignST";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +37,7 @@ const IndexRouter = () => {
     return <Navigate to={`/${user.role}`} replace />;
   }
 
+  // CORRECT: Default redirect to /auth when not logged in or role is missing
   return <Navigate to="/auth" replace />;
 };
 
@@ -46,11 +50,13 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<IndexRouter />} />
-            <Route path="/auth" element={<Auth />} />            
+            <Route path="/auth" element={<Auth />} /> {/* This is the correct login route */}
             <Route path="/parent" element={<ParentDashboard />} />
             <Route path="/coach" element={<CoachDashboard />} />
             <Route path="/staff" element={<StaffDashboard />} />
             <Route path="/add-players" element={<AddPlayers />} />
+            <Route path="/assign-st" element={<AssignST />} />
+            {/* <Route path="/login" element={loginForm()} /> */}
             <Route
               path="/edit-player/:academyId/:playerId"
               element={<EditPlayers />}

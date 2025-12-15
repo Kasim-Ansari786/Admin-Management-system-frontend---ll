@@ -131,7 +131,7 @@ const CoachDetails = () => {
     "7:00 PM",
     "8:00 PM",
     "9:00 PM",
-  ];  
+  ];
   const averageAttendance = useMemo(() => {
     if (!assignedPlayers.length) return 0;
     const total = assignedPlayers.reduce((sum, p) => sum + p.attendance, 0);
@@ -386,7 +386,6 @@ const CoachDetails = () => {
     setIsScheduleDialogOpen(true);
   };
 
-
   const resetForm = () => {
     setIsEditing(false);
     setEditingScheduleId(null);
@@ -529,16 +528,16 @@ const CoachDetails = () => {
     if (!confirmed) return;
 
     const numericId = Number(session_id);
-    const isPersisted = Number.isInteger(numericId) && numericId > 0; 
+    const isPersisted = Number.isInteger(numericId) && numericId > 0;
 
     setIsSubmitting(true);
     try {
       if (isPersisted) {
-        const status = await deleteSession(session_id); 
+        const status = await deleteSession(session_id);
         if (status !== 204 && status !== 200) {
           throw new Error(`Unexpected response from server: ${status}`);
         }
-      }     
+      }
       setSchedules((prev) =>
         prev.filter((s) => String(s.id) !== String(session_id))
       );
@@ -555,7 +554,7 @@ const CoachDetails = () => {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to delete the schedule.";
-      toast({ 
+      toast({
         title: "Deletion Failed ❌",
         description: errorMessage,
         variant: "destructive",
@@ -573,15 +572,31 @@ const CoachDetails = () => {
     );
   }
 
+  // const handleSignOut = () => {
+  //   logout();
+  //   toast({
+  //     title: "Signed Out",
+  //     description:
+  //       "You have been securely logged out and redirected to the login page.",
+  //     variant: "success",
+  //   });
+  //   navigate("/staff?tab=coaches");
+  // };
+
   if (!coachData) {
     return (
       <div className="p-8">
-        <div className="flex items-center mb-6">
-          <Button onClick={() => navigate(-1)} variant="outline">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
+        <div className="flex items-center mb-6">        
+          {/* <Button
+            variant="secondary"
+            className="bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground"
+            onClick={handleSignOut}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign Out
+          </Button> */}
         </div>
+
         <Card>
           <CardHeader>
             <CardTitle>Coach Not Found</CardTitle>
@@ -605,7 +620,7 @@ const CoachDetails = () => {
   return (
     <div className="p-8">
       <div className="bg-gradient-primary rounded-xl p-6 text-primary-foreground flex justify-between items-start">
-      <div className="flex items-center">
+        <div className="flex items-center">
           <Button
             variant="secondary"
             className="text-primary hover:bg-white/90"
@@ -634,7 +649,7 @@ const CoachDetails = () => {
           >
             {coachData.status}
           </Badge>
-        </div>        
+        </div>
       </div>
       &nbsp;&nbsp;&nbsp;
       <Card className="mb-8">
@@ -674,7 +689,7 @@ const CoachDetails = () => {
             <div className="flex items-start gap-3">
               <IndianRupee className="h-5 w-5 text-primary mt-0.5" />
               <div>
-                <p className="text-sm text-muted-foreground">Weekly Salary</p>
+                <p className="text-sm text-muted-foreground">Session Salary</p>
                 <p className="font-medium mb-1">₹{coachData.week_salary}</p>
               </div>
             </div>
@@ -752,8 +767,7 @@ const CoachDetails = () => {
                   </div>
                 </CardContent>
               </Card>
-              
-              
+
               <Card className="glass-card animate-fade-up">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold font-display">
@@ -816,7 +830,7 @@ const CoachDetails = () => {
                   </div>
                 </CardContent>
               </Card>
-                          </div>
+            </div>
             <Card className="xl:col-span-2">
               <CardHeader>
                 <CardTitle>Assigned Players</CardTitle>
@@ -921,7 +935,7 @@ const CoachDetails = () => {
                           <Pencil className="h-4 w-4 text-primary" />
                         </Button>
                         <button
-                          className="btn-ghost btn-icon" 
+                          className="btn-ghost btn-icon"
                           onClick={() => handleDeleteSchedule(session.id)}
                           disabled={isSubmitting}
                           title="Delete schedule"
@@ -941,7 +955,7 @@ const CoachDetails = () => {
         open={isScheduleDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
-            resetForm(); 
+            resetForm();
           }
           setIsScheduleDialogOpen(open);
         }}

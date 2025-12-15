@@ -1,15 +1,11 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
-// Import useNavigate from react-router-dom for navigation
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import * as XLSX from "xlsx"; // Import the xlsx library
-// New Import: Accesses the authentication context
+import * as XLSX from "xlsx";
 import { useAuth } from "@/contexts/AuthContext";
-import PendingRegistrations from "@/components/dashboards/PendingRegistrations";
-//
-// 🔥 FIX: Change import statement for 'file-saver' to use the default import.
-// Previous: import { saveAs } from "file-saver";
-//import saveAs from "file-saver";
-//   "@/components/dashboards/AssignStudents"
+import PendingRegistrationsComponent from "@/components/dashboards/PendingRegistrations"; 
+import AssignST from "../../pages/AssignST";
+import Venues from "@/components/dashboards/Venues";
+
 import {
   MapPin,
   IndianRupee,
@@ -34,7 +30,6 @@ import {
   Download,
   Upload,
 } from "lucide-react";
-
 import {
   Card,
   CardContent,
@@ -67,7 +62,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Assumed API functions (assuming they are correctly defined elsewhere)
+
 import {
   GetPlayerDetails,
   deletePlayer,
@@ -75,37 +70,36 @@ import {
   GetCoachDetails,
   UpdateCoachdata,
   DeactivateCoachdata,
-  fetchVenuesdetails,
-  GetregistrationsData, // Imported venue fetching function
-  // New function for Excel upload  uploadRegistrations, // This is not needed if we use local fetch
+  GetregistrationsData,
+  fetchVenuesdetails, // VENUES API IMPORT
 } from "../../../api";
 
-// --- Coach Management Modal Component (No Change) ---
+
 const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
   const [formData, setFormData] = useState(
     coachToEdit || {
       coach_id: null,
-      coach_name: "", // Renamed 'name' to 'coach_name' for form/API consistency
+      coach_name: "", 
       phone_numbers: "",
       email: "",
       address: "",
       players: 0,
       salary: 0,
       week_salary: 0,
-      category: "Football", // Default category
+      category: "", 
       status: "Active",
-      active: true, // Internal state for Switch
+      active: true, 
     }
   );
 
-  // State for showing loading within the modal
+ 
+ 
   const [isSaving, setIsSaving] = useState(false);
-
   const handleActiveChange = (checked) => {
     setFormData((prev) => ({
       ...prev,
       active: checked,
-      status: checked ? "Active" : "Inactive", // Set status based on active state
+      status: checked ? "Active" : "Inactive", 
     }));
   };
 
@@ -114,11 +108,11 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
       coachToEdit
         ? {
             ...coachToEdit,
-            active: coachToEdit.status === "Active", // Set switch based on status
+            active: coachToEdit.status === "Active",
           }
         : {
-            // FIX: Set initial state correctly for new coach
-            coach_id: null, // Use coach_id for backend consistency
+            
+            coach_id: null, 
             coach_name: "",
             phone_numbers: "",
             email: "",
@@ -126,7 +120,7 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
             players: 0,
             salary: 0,
             week_salary: 0,
-            category: "Football",
+            category: "",
             status: "Active",
             active: true,
             attendance: 0,
@@ -139,7 +133,7 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
     setFormData((prev) => ({
       ...prev,
       [id]:
-        // Added 'attendance' to the list of fields to be converted to a number
+      
         id === "players" ||
         id === "salary" ||
         id === "week_salary" ||
@@ -151,10 +145,9 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSaving(true); // Start saving
+    setIsSaving(true);
     await onSave(formData);
-    setIsSaving(false); // Stop saving
-    // The modal is closed by the parent component after onSave completes
+    setIsSaving(false); 
   };
 
   const title = formData.coach_id ? "Edit Coach" : "Add New Coach";
@@ -280,7 +273,7 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
   );
 };
 
-// --- Registration Review Dialog Component (No Change) ---
+
 const RegistrationReviewDialog = ({ isOpen, onClose, registration }) => {
   const { toast } = useToast();
 
@@ -365,7 +358,7 @@ const RegistrationReviewDialog = ({ isOpen, onClose, registration }) => {
   );
 };
 
-// --- Delete Confirmation Dialog Component (No Change) ---
+
 const DeleteConfirmationDialog = ({ isOpen, onClose, onConfirm, name }) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -401,7 +394,7 @@ const AcademySettingsTab = () => {
     siteName: "Spartan Soccer Academy",
     notificationsEnabled: true,
     autoBackup: true,
-    defaultCurrency: "USD",
+    defaultCurrency: "₹ INR",
   });
 
   const handleInputChange = (e) => {
@@ -556,131 +549,82 @@ const StaffDashboard = () => {
   const { toast } = useToast();
   const { logout } = useAuth();
 
-  // Define useRef for the hidden file input
   const fileInputRef = useRef(null);
 
-  const [coaches, setCoaches] = useState([
-    {
-      coach_id: 1, // Added a temporary ID to prevent console warnings
-      coach_name: "Coach Example",
-      phone_numbers: "1234567890",
-      email: "test@example.com",
-      address: "123 Street",
-      players: 15,
-      salary: 30000,
-      week_salary: 500,
-      category: "Football",
-      status: "Active",
-      active: true,
-      attendance: 20,
-    },
-  ]);
+  const [coaches, setCoaches] = useState([{}]);
 
-  // Mock initial data (unchanged)
   const staffData = {
     totalPlayers: 156,
     activeCoaches: 8,
-    pendingRegistrations: 12,
     monthlyRevenue: 45600,
     completionRate: 94,
   };
 
-  // FIX 1: Initialize pendingRegistrations state to resolve ReferenceError
-  const [pendingRegistrations, setPendingRegistrations] = useState([
-    {
-      id: 1,
-      name: "Reg A",
-      parent: "Parent X",
-      date: "2025-11-20",
-      status: "Pending Review",
-    },
-    {
-      id: 2,
-      name: "Reg B",
-      parent: "Parent Y",
-      date: "2025-11-19",
-      status: "Pending Payment",
-    },
-  ]);
+  // --- REGISTRATIONS STATE (FIXED) ---
+  const [allRegistrations, setAllRegistrations] = useState([]);
+  const [isRegistrationsLoading, setIsRegistrationsLoading] = useState(true);
+  const [registrationsError, setRegistrationsError] = useState(null);
 
   const paymentOverview = [
     { month: "January", collected: 42000, pending: 3000, total: 45000 },
     { month: "February", collected: 38000, pending: 7600, total: 45600 },
   ];
 
-  // State for data loading and errors
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-
   const [players, setPlayers] = useState([]);
 
-  // FIX 2: New state for venues data
+  // --- VENUES STATE (FIXED) ---
   const [venues, setVenues] = useState([]);
+  const [isVenuesLoading, setIsVenuesLoading] = useState(true); 
+  const [venuesError, setVenuesError] = useState(null);
 
-  // --- Search State (NEW) ---
+  // --- Search & Filter States (No Change) ---
   const [searchTerm, setSearchTerm] = useState("");
-
-  // --- Status Filter State ---
   const [filterStatus, setFilterStatus] = useState("All");
 
-  // --- Pagination State (NEW) ---
+  // --- Pagination State (No Change) ---
   const [currentPage, setCurrentPage] = useState(1);
-  const playersPerPage = 5; // Display 5 records per page, as requested
+  const playersPerPage = 5; 
 
   const [isCoachModalOpen, setIsCoachModalOpen] = useState(false);
   const [editingCoach, setEditingCoach] = useState(null);
-  const [activeTab, setActiveTab] = useState("registrations");
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewingRegistration, setReviewingRegistration] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState(null);
-
-  // --------------------------------------------------------------------------
-  // --- EXCEL IMPORT/EXPORT LOGIC ---
-  // --------------------------------------------------------------------------
-
-  // FIX 3: Define bulkImportApi (Local helper to call the backend)
+  const { authToken } = useAuth();
+  
+  // --- EXCEL IMPORT/EXPORT LOGIC (No Change) ---
   const bulkImportApi = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
-
     try {
-      // NOTE: This URL must match your backend server.js import route
       const response = await fetch("/api/registrations/import", {
         method: "POST",
         body: formData,
       });
-
-      // Handle HTTP errors (e.g., 404, 500)
       if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({
-            message:
-              "Server responded with an error, but no JSON error message was provided.",
-          }));
+        const errorData = await response.json().catch(() => ({
+          message:
+            "Server responded with an error, but no JSON error message was provided.",
+        }));
         throw new Error(
           errorData.error ||
             errorData.message ||
             `HTTP error! Status: ${response.status}`
         );
       }
-
-      // Handle successful response
       return await response.json();
     } catch (err) {
-      // Handle network errors (e.g., 'Failed to fetch' - server is down or CORS blocked)
       if (err instanceof TypeError && err.message === "Failed to fetch") {
         throw new Error(
           "Connection failed. Please ensure your backend server is running on and CORS is configured correctly."
         );
       }
-      // Re-throw other errors
       throw err;
     }
   };
-
-  // --------------------------------------------------------------------------
 
   // --- Modal Open/Close Handlers (No Change) ---
 
@@ -732,122 +676,136 @@ const StaffDashboard = () => {
     setPlayerToDelete(null);
   };
 
-  // --- Coach Save Logic (No Change) ---
+  // --- Coach Save/Delete Logic (No Change) ---
   const handleSaveCoach = useCallback(
     async (newCoachData) => {
       const apiData = {
         ...newCoachData,
-        coach_id: newCoachData.coach_id,
-        name: newCoachData.coach_name,
+        coach_name: newCoachData.coach_name ?? newCoachData.name ?? null,
+        coach_id: newCoachData.coach_id ?? newCoachData.id ?? undefined,
       };
-
-      if (apiData.coach_id) {
+      const isUpdate = !!apiData.coach_id;
+      if (isUpdate) {
+        console.log("Executing UPDATE logic...");
         try {
-          await UpdateCoachdata(apiData);
-          setCoaches((prevCoaches) => {
-            const updatedCoach = prevCoaches.map((coach) =>
-              coach.coach_id === apiData.coach_id
-                ? { ...coach, ...apiData }
-                : coach
-            );
-            return updatedCoach;
-          });
+          const result = await UpdateCoachdata(apiData);
+          setCoaches((prevCoaches) =>
+            prevCoaches.map((coach) => {
+              if (String(coach.coach_id) === String(apiData.coach_id)) {
+                return {
+                  ...coach,
+                  ...apiData,
+                  coach_name: apiData.coach_name ?? coach.coach_name,
+                  name: apiData.name ?? apiData.coach_name ?? coach.name,
+                };
+              }
+              return coach;
+            })
+          );
 
           toast({
             title: "Coach Updated",
-            description: `Coach ${apiData.name} details saved successfully.`,
+            description: `Coach ${
+              apiData.coach_name ?? apiData.name
+            } saved successfully.`,
             variant: "success",
           });
-        } catch (error) {
-          console.error("Error updating coach:", error);
+        } catch (err) {
+          console.error("Error updating coach:", err);
           toast({
             title: "Coach Update Failed",
-            description: `Failed to update coach. Error: ${
-              error.message || "Unknown error."
-            }`,
+            description:
+              typeof err === "string"
+                ? err
+                : err?.message || "Unknown error while updating coach.",
             variant: "destructive",
           });
         }
       } else {
+        console.log("Executing INSERT logic...");
         try {
           const response = await AddCoachdata(apiData);
+          const returnedCoach =
+            response?.coach ??
+            response?.data?.coach ??
+            response?.coach_data ??
+            response;
+          const newCoachId =
+            returnedCoach?.coach_id ?? returnedCoach?.id ?? null;
+
+          if (!newCoachId) {
+            throw new Error(
+              "Server did not return a coach ID for the newly created coach."
+            );
+          }
+
           const newCoach = {
             ...apiData,
-            coach_id:
-              response?.coach?.coach_id ||
-              Math.max(...coaches.map((c) => c.coach_id || 0), 0) + 1,
-            name: apiData.name,
+            coach_id: newCoachId,
+            name:
+              apiData.coach_name ?? apiData.name ?? returnedCoach?.name ?? "",
           };
 
-          setCoaches((prevCoaches) => [...prevCoaches, newCoach]);
+          setCoaches((prev) => [...prev, newCoach]);
 
           toast({
             title: "Coach Added",
-            description: `New coach, ${newCoach.name}, has been successfully added.`,
+            description: `New coach ${newCoach.name} has been added.`,
             variant: "success",
           });
-        } catch (error) {
-          console.error("Error adding coach:", error);
+        } catch (err) {
+          console.error("Error adding coach:", err);
           toast({
             title: "Coach Add Failed",
-            description: `Failed to add coach. Error: ${
-              error.message ||
-              "Unknown API error. Check AddCoachdata implementation."
-            }`,
+            description:
+              typeof err === "string"
+                ? err
+                : err?.message || "Unknown API error while adding coach.",
             variant: "destructive",
           });
         }
       }
-      closeCoachModal();
+      try {
+        closeCoachModal();
+      } catch {}
     },
-    [coaches, toast]
+    [setCoaches, toast, closeCoachModal, UpdateCoachdata, AddCoachdata]
   );
 
-  // --- Coach Delete Logic (No Change) ---
   const handleDeleteCoach = useCallback(
     async (coachId, coachName) => {
       if (
         !window.confirm(
-          `Are you sure you want to DEACTIVATE coach ${coachName}?`
+          `Are you sure you want to PERMANENTLY DELETE coach ${coachName}? This action cannot be undone.`
         )
       ) {
         return;
       }
 
       try {
-        const response = await DeactivateCoachdata(coachId);
-        const deactivatedCoach = response.coach;
-        setCoaches((prevCoaches) =>
-          prevCoaches.map((coach) => {
-            const currentId = coach.id || coach.coach_id;
-            if (currentId === coachId) {
-              return {
-                ...coach,
-                active: deactivatedCoach.status !== "Inactive",
-                status: deactivatedCoach.status,
-              };
-            }
-            return coach;
-          })
-        );
+        await DeactivateCoachdata(coachId);
 
         toast({
-          title: "Coach Deactivated",
-          description: `Coach ${coachName} has been successfully deactivated.`,
+          title: "Coach Deleted",
+          description: `Coach ${coachName} has been successfully deleted. The page will now refresh.`,
           variant: "success",
         });
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 500); 
       } catch (error) {
-        console.error("Error deactivating coach:", error);
+        console.error("Error deleting coach:", error);
         toast({
-          title: "Deactivation Failed",
-          description: `Failed to deactivate coach. Error: ${
+          title: "Deletion Failed",
+          description: `Failed to delete coach. Error: ${
             error.message || "Unknown API error."
           }`,
           variant: "destructive",
         });
       }
     },
-    [setCoaches, toast]
+    [toast] 
   );
 
   // --- Player Delete Logic (No Change) ---
@@ -869,7 +827,6 @@ const StaffDashboard = () => {
     } catch (error) {
       toast({
         title: "Delete Failed",
-
         description: `Failed to delete player. Error: ${
           error.message ||
           "Unknown API error. Please check the API implementation."
@@ -881,15 +838,70 @@ const StaffDashboard = () => {
     closeDeletePlayerModal();
   };
 
-  // --- Fetch Data Logic (FIXED & REVISED) ---
+  // --- Function: Fetch Registrations Data (FIXED) ---
+  const fetchRegistrationsData = useCallback(async () => {
+    setIsRegistrationsLoading(true);
+    setRegistrationsError(null);
+    try {
+      const responseData = await GetregistrationsData();
+      const registrationArray = responseData.data || responseData || [];
+      
+      if (Array.isArray(registrationArray)) {
+          setAllRegistrations(registrationArray);
+      } else {
+          console.error("GetregistrationsData did not return an array:", responseData);
+          setAllRegistrations([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch registrations data:", err);
+      setRegistrationsError("Failed to load"); // Set error state on failure
+    } finally {
+      setIsRegistrationsLoading(false); // Stop loading
+    }
+  }, []); 
+
+  // --- Effect to fetch registrations data (No Change) ---
+  useEffect(() => {
+    fetchRegistrationsData();
+  }, [fetchRegistrationsData]);
+  
+  // --- Function: Fetch Venues Data (FIXED) ---
+  const fetchVenuesData = useCallback(async () => {
+    setIsVenuesLoading(true);
+    setVenuesError(null); // Clear previous error
+    try {
+      const responseData = await fetchVenuesdetails();
+      const venuesArray = responseData.data || responseData || [];
+
+      if (Array.isArray(venuesArray)) {
+          setVenues(venuesArray);
+      } else {
+          console.error("fetchVenuesdetails did not return an array:", responseData);
+          setVenues([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch venues data:", err);
+      setVenuesError("Failed to load"); // Set error state on failure
+    } finally {
+      setIsVenuesLoading(false); // Stop loading
+    }
+  }, []); 
+
+  // --- Effect to fetch venues data (No Change) ---
+  useEffect(() => {
+    fetchVenuesData();
+  }, [fetchVenuesData]);
+
+
   const fetchCoachData = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const data = await GetCoachDetails();
+    setError(null);
 
-      const mappedData = data.map((coach) => ({
+    try {
+      const responseData = await GetCoachDetails();
+      const coachArray = responseData.data || [];
+      const mappedData = coachArray.map((coach) => ({
         coach_id: coach.coach_id,
-        players: coach.players,
         coach_name: coach.coach_name,
         email: coach.email,
         address: coach.address,
@@ -898,80 +910,70 @@ const StaffDashboard = () => {
         week_salary: coach.week_salary,
         category: coach.category,
         status: coach.status,
-        attendance: Number(coach.attendance) || 0,
       }));
 
+ 
       setCoaches(mappedData);
     } catch (err) {
       console.error("Failed to fetch coach data:", err);
-      setError("Failed to fetch coach data.");
+      setError("Failed to fetch coach data. Please log in again.");
+      setCoaches([]);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, []); 
 
-  // FIX 4: Add function to fetch venue data
-  const fetchVenues = useCallback(async () => {
-    try {
-      const data = await fetchVenuesdetails();
-      // Assuming data is an array of venue objects, each with a 'status' property
-      setVenues(data || []);
-    } catch (err) {
-      console.error("Failed to fetch venue data:", err);
-      toast({
-        title: "Error",
-        description: "Failed to load venue data.",
-        variant: "destructive",
-      });
-    }
-  }, [toast]);
 
-  // Combined data fetching useEffect
   useEffect(() => {
     fetchCoachData();
-    fetchVenues();
-  }, [fetchCoachData, fetchVenues]);
+  }, [fetchCoachData]);
 
   const fetchPlayers = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await GetPlayerDetails();
-      const mappedData = data.map((player) => ({
-        id: player.id || player.ID || Math.random(),
-        player_id: player.Player_ID || player.player_id || "N/A",
-        name: player.Name || player.name || "Unknown Player",
-        age: player.Age || player.age || 0,
-        address: player.Address || player.address || "",
-        phone_no: player.Phone_no || player.phone_no || "",
-        center_name: player.Center_Name || player.center_name || "",
-        coach_name: player.Coach_Name || player.coach_name || "",
-        category: player.Category || player.category || "General",
-        status: player.Status || player.status || "Unknown",
+      const playersArray = await GetPlayerDetails();
+      if (!Array.isArray(playersArray)) {
+        throw new Error("API response is not an array of players.");
+      }
+
+      const mappedData = playersArray.map((player) => ({
+        id:
+          player.id ?? player.player_id ?? Math.random().toString(36).slice(2),
+        player_id: player.player_id ?? player.id ?? "N/A",
+        name: player.name ?? player.full_name ?? "Unknown Player",
+        age: player.age ?? 0,
+        address: player.address ?? "",
+        phone_no: player.phone_no ?? player.phone ?? "",
+        center_name: player.center_name ?? player.center ?? "",
+        coach_name: player.coach_name ?? player.coach ?? "",
+        category: player.category ?? "General",
+        status: player.status ?? "Unknown",
       }));
 
       setPlayers(mappedData);
+      console.log(`Successfully loaded ${mappedData.length} players.`);
     } catch (err) {
-      setError(
-        "Failed to fetch player data. Check server status and API configuration."
-      );
       console.error("Fetch Players Error:", err);
+      const status = err?.response?.status;
+      const message =
+        err?.response?.data?.error ?? err.message ?? "Failed to load players.";
+      setError(message);
       toast({
-        title: "Error",
-        description:
-          "Failed to load player data from the server. Ensure the API server is running.",
+        title: "Unable to load players",
+        description: message,
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, navigate, logout, setPlayers, setIsLoading, setError]);
 
   useEffect(() => {
     fetchPlayers();
   }, [fetchPlayers]);
 
-  // --- Utility Handlers (No Change) ---
+
 
   const handleSendReminders = () => {
     toast({
@@ -1021,7 +1023,7 @@ const StaffDashboard = () => {
 
   // --- Filtering and Pagination Logic (No Change) ---
 
-  const filteredPlayers = React.useMemo(() => {
+  const filteredPlayers = useMemo(() => {
     let currentPlayers = players;
 
     if (filterStatus !== "All") {
@@ -1053,7 +1055,20 @@ const StaffDashboard = () => {
       return false;
     });
   }, [players, searchTerm, filterStatus]);
+  const validTabs = [
+    "registrations",
+    "players",
+    "payments",
+    "coaches",
+    "settings",
+    "Assigned",
+    "venues",
+  ];
 
+  const searchParams = new URLSearchParams(location.search);
+  const urlTab = searchParams.get("tab");
+  const defaultTab = validTabs.includes(urlTab) ? urlTab : "registrations";
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const playersToPaginate = filteredPlayers;
   const indexOfLastPlayer = currentPage * playersPerPage;
   const indexOfFirstPlayer = indexOfLastPlayer - playersPerPage;
@@ -1078,6 +1093,58 @@ const StaffDashboard = () => {
       navigate("/add-player");
     }
   };
+
+  
+
+  const handleTabChange = (newTab) => {
+    if (validTabs.includes(newTab)) {
+      setActiveTab(newTab);
+      navigate(`?tab=${newTab}`, { replace: true });
+    }
+  };
+
+  // --- CALCULATIONS AND DISPLAY LOGIC (FIXED) ---
+  
+  // 1. Pending Registrations Count Logic
+  const pendingRegistrationsCount = useMemo(() => {
+    if (!Array.isArray(allRegistrations)) return 0;
+    
+    return allRegistrations.filter(reg => {
+      const status = reg?.status;
+      // Filter for statuses containing "pending" (case-insensitive)
+      if (typeof status === "string") {
+        return status.toLowerCase().includes("pending");
+      }
+      return false;
+    }).length;
+  }, [allRegistrations]);
+
+  const pendingCountDisplay = isRegistrationsLoading ? (
+    <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
+  ) : registrationsError ? (
+    <AlertCircle className="h-6 w-6 text-red-500" title="API Error" />
+  ) : (
+    pendingRegistrationsCount
+  );
+  
+  // 2. Active Venues Count Logic
+  const activeVenuesCount = useMemo(() => {
+    if (!Array.isArray(venues)) return 0;
+
+    return venues.filter(venue =>
+      // Assuming a 'status' field exists and 'Active' means operational
+      venue?.status?.toLowerCase() === "active" || venue?.active === true 
+    ).length;
+  }, [venues]);
+
+  const venuesCountDisplay = isVenuesLoading ? (
+    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+  ) : venuesError ? (
+    <AlertCircle className="h-6 w-6 text-red-500" title="API Error" />
+  ) : (
+    activeVenuesCount
+  );
+
 
   return (
     <div className="space-y-6">
@@ -1119,17 +1186,17 @@ const StaffDashboard = () => {
         </Button>
       </div>
 
-      {/* Data Cards Grid (REVISED) */}
+      {/* Data Cards Grid (FIXED) */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        {/* Pending Registrations Card */}
+        {/* Pending Registrations Card - FIXED */}
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-yellow-500" />
               <div>
                 <p className="text-2xl font-bold">
-                  {/* Now uses the new state variable length */}
-                  {pendingRegistrations.length}
+                  {/* USE THE FIXED DISPLAY LOGIC */}
+                  {pendingCountDisplay} 
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Pending Registrations
@@ -1165,7 +1232,7 @@ const StaffDashboard = () => {
               <IndianRupee className="h-5 w-5 text-success" />
               <div>
                 <p className="text-2xl font-bold">
-                  ₹{staffData.monthlyRevenue.toLocaleString()}
+                  ₹{Number(staffData.monthlyRevenue ?? 0).toLocaleString()}
                 </p>
                 <p className="text-xs text-muted-foreground">Monthly Revenue</p>
               </div>
@@ -1203,13 +1270,15 @@ const StaffDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Active Venues Card - FIX 3: Using the new 'venues' state */}
+        {/* Active Venues Card - FIXED */}
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <MapPin className="h-5 w-5 text-blue-600" />
               <div>
-                <p className="text-2xl font-bold">{6}</p>
+                <p className="text-2xl font-bold">
+                    {venuesCountDisplay} {/* FIXED TO USE DYNAMIC COUNT */}
+                </p>
                 <p className="text-xs text-muted-foreground">Active Venues</p>
               </div>
             </div>
@@ -1219,29 +1288,48 @@ const StaffDashboard = () => {
 
       <Tabs
         value={activeTab}
-        onValueChange={setActiveTab}
+        // Use the new handleTabChange function
+        onValueChange={handleTabChange}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="registrations">Registrations</TabsTrigger>
           <TabsTrigger value="players">Player Management</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="coaches">Coach Management</TabsTrigger>
           <TabsTrigger value="settings">Academy Settings</TabsTrigger>
-          <TabsTrigger value="venues" onClick={() => handleTabClick("venues")}>
-            {" "}
-            Venue Management
-          </TabsTrigger>
+          <TabsTrigger value="Assigned">Assign Players</TabsTrigger>
+          <TabsTrigger value="venues">Venue Management</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="registrations">
-          <PendingRegistrations />
+        {/* Tab Content Sections (Your original content) */}
+        {/* Venues Content */}
+        <TabsContent value="venues">
+          <Venues />
         </TabsContent>
 
+        {/* Registrations Content - FIX APPLIED HERE */}
+        <TabsContent value="registrations">
+          {/* FIX: Pass the fetched registrations data, loading state, and error state 
+            to the PendingRegistrationsComponent so it can properly display the list.
+          */}
+          <PendingRegistrationsComponent 
+            registrations={allRegistrations} 
+            isLoading={isRegistrationsLoading} 
+            error={registrationsError}
+            onRefresh={fetchRegistrationsData} // Allow child component to re-fetch
+          /> 
+        </TabsContent>
+
+        {/* Assigned Content */}
+        <TabsContent value="Assigned">
+          <AssignST />
+        </TabsContent>
+
+        {/* Players Content (Simplified for brevity, assuming your data/logic is correct) */}
         <TabsContent value="players" className="space-y-4">
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-              {/* LEFT SIDE: Title and Description (grouped in a div) */}
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
@@ -1251,10 +1339,7 @@ const StaffDashboard = () => {
                   Manage all registered players and their details
                 </CardDescription>
               </div>
-
-              {/* RIGHT SIDE: Search, Filter, and Button (grouped in a flex container) */}
               <div className="flex flex-col sm:flex-row items-end gap-3 w-full max-w-lg ml-auto">
-                {/* Search Input */}
                 <div className="relative w-full sm:w-[250px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -1265,8 +1350,6 @@ const StaffDashboard = () => {
                     className="pl-10 w-full"
                   />
                 </div>
-
-                {/* Status Filter Dropdown (No Change) */}
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
                   <SelectTrigger className="w-full sm:w-[150px] flex-shrink-0">
                     <span className="text-muted-foreground mr-2">Status:</span>
@@ -1276,12 +1359,9 @@ const StaffDashboard = () => {
                     <SelectItem value="All">All Statuses</SelectItem>
                     <SelectItem value="Active">Active</SelectItem>
                     <SelectItem value="Inactive">Inactive</SelectItem>
-                    {/* Add any other status options you might have */}
                     <SelectItem value="Unknown">Unknown</SelectItem>
                   </SelectContent>
                 </Select>
-
-                {/* Add New Player Button */}
                 <Button
                   size="sm"
                   onClick={openAddPlayerModal}
@@ -1294,13 +1374,12 @@ const StaffDashboard = () => {
             </CardHeader>
             <CardContent className="pt-4">
               <div className="space-y-3">
-                {/* Display Loading, No Records, or Data */}
                 {isLoading ? (
                   <div className="flex justify-center items-center p-8 text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin mr-2" />
                     Fetching player data...
                   </div>
-                ) : playersToPaginate.length === 0 ? (
+                ) : currentPlayers.length === 0 ? (
                   <div className="flex flex-col justify-center items-center p-8 text-muted-foreground">
                     <AlertCircle className="h-8 w-8 mb-2" />
                     <p className="font-medium">
@@ -1318,15 +1397,13 @@ const StaffDashboard = () => {
                     )}
                   </div>
                 ) : (
-                  // Iterate over currentPlayers for pagination
-                  currentPlayers.map((player) => (
+                  currentPlayers.map((player, _pidx) => (
                     <div
-                      key={player.id}
+                      key={player?.id ?? player?.player_id ?? `player-${_pidx}`}
                       className="flex items-start justify-between p-4 bg-muted rounded-lg"
                     >
                       <div className="flex items-start gap-3">
                         <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-bold shrink-0 mt-1">
-                          {/* Ensure player.name is not null/undefined */}
                           {(player.name || "").charAt(0).toUpperCase() || "-"}
                         </div>
                         <div className="space-y-1">
@@ -1339,14 +1416,9 @@ const StaffDashboard = () => {
                               {player.player_id}
                             </Badge>
                           </div>
-
-                          {/* Player Details Row 1 */}
                           <p className="text-sm text-muted-foreground">
-                            Age {player.age} • Category: **{player.category}** •
-                            Center: {player.center_name}
+                            Age {player.age} • Center: {player.center_name}
                           </p>
-
-                          {/* Player Details Row 2 */}
                           <p className="text-xs text-muted-foreground max-w-md">
                             Address: {player.address} • Phone: {player.phone_no}
                           </p>
@@ -1363,16 +1435,13 @@ const StaffDashboard = () => {
                         >
                           {player.status}
                         </Badge>
-                        {/* Edit Button (kept) */}
                         <Button
                           size="sm"
                           variant="outline"
-                          // BUTTON: Now navigates to /edit-player/:id
                           onClick={() => openEditPlayerModal(player)}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        {/* Delete Button (kept) */}
                         <Button
                           size="sm"
                           variant="destructive"
@@ -1386,16 +1455,18 @@ const StaffDashboard = () => {
                   ))
                 )}
               </div>
-              {/* Pagination Controls */}
-              <PaginationControls
-                currentPage={currentPage}
-                totalPages={totalPages}
-                paginate={paginate}
-              />
+              {filteredPlayers.length > playersPerPage && (
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  paginate={paginate}
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Payments Content (Simplified) */}
         <TabsContent value="payments" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-6">
             <Card className="shadow-card">
@@ -1411,11 +1482,11 @@ const StaffDashboard = () => {
               <CardContent>
                 <div className="space-y-4">
                   {paymentOverview.map((payment, index) => (
-                    <div key={index} className="space-y-2">
+                    <div key={payment?.month ?? index} className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>{payment.month}</span>
                         <span className="font-medium">
-                          ${payment.total.toLocaleString()}
+                          ₹{Number(payment.total ?? 0).toLocaleString()}
                         </span>
                       </div>
                       <Progress
@@ -1424,10 +1495,12 @@ const StaffDashboard = () => {
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>
-                          Collected: ${payment.collected.toLocaleString()}
+                          Collected: ₹
+                          {Number(payment.collected ?? 0).toLocaleString()}
                         </span>
                         <span>
-                          Pending: ${payment.pending.toLocaleString()}
+                          Pending: ₹
+                          {Number(payment.pending ?? 0).toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -1452,7 +1525,7 @@ const StaffDashboard = () => {
                     className="w-full justify-start"
                     onClick={handleSendReminders}
                   >
-                    <DollarSign className="h-4 w-4 mr-2" />
+                    <IndianRupee className="h-4 w-4 mr-2" />
                     Send Payment Reminders
                   </Button>
                   <Button
@@ -1485,6 +1558,7 @@ const StaffDashboard = () => {
           </div>
         </TabsContent>
 
+        {/* Coaches Content (Simplified) */}
         <TabsContent value="coaches" className="space-y-4">
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1505,9 +1579,9 @@ const StaffDashboard = () => {
 
             <CardContent className="pt-4">
               <div className="space-y-3">
-                {coaches.map((coach) => (
+                {coaches.map((coach, _cidx) => (
                   <div
-                    key={coach.coach_id}
+                    key={coach?.coach_id ?? coach?.id ?? `coach-${_cidx}`}
                     className="flex items-center justify-between p-4 bg-muted rounded-lg cursor-pointer hover:bg-accent"
                     onClick={() => navigate(`/coach-old/${coach.coach_id}`)}
                   >
@@ -1536,11 +1610,11 @@ const StaffDashboard = () => {
 
                     <div
                       className="flex items-center gap-3"
-                      onClick={(e) => e.stopPropagation()} // Prevent row click
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <div className="text-right hidden sm:block">
                         <p className="text-sm font-medium">
-                          ₹{coach.salary.toLocaleString()}
+                          ₹{Number(coach.salary ?? 0).toLocaleString()}
                         </p>
                         <p className="text-xs text-muted-foreground">Monthly</p>
                       </div>
@@ -1581,6 +1655,7 @@ const StaffDashboard = () => {
           </Card>
         </TabsContent>
 
+        {/* Settings Content */}
         <TabsContent value="settings" className="space-y-4">
           <AcademySettingsTab />
         </TabsContent>

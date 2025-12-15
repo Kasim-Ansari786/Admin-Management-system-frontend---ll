@@ -7,30 +7,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner'; // Using sonner for toasts
+import { toast } from 'sonner'; 
 import { useAuth } from '@/contexts/AuthContext';
-import { Eye, EyeOff, User, LogIn as LogInIcon } from 'lucide-react';
+import { Eye, EyeOff, LogIn as LogInIcon } from 'lucide-react';
 
 const LoginForm = ({ onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // FIX: Default value was '/auth', which is incorrect for the API call. 
-  // Changed to a valid role, like 'coach'.
   const [role, setRole] = useState('coach'); 
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Local loading state for form submission
+  const [isLoading, setIsLoading] = useState(false); 
 
-  const { login, error: authError } = useAuth(); // Get login function and auth error
+  const { login, error: authError } = useAuth(); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Call the login function from AuthContext with email, password, and role
-    const { error } = await login(email, password, role);
+    const result = await login(email, password, role); 
 
-    if (error) {
-        toast.error("Login Failed", { description: error });
+    if (result.error) {
+        toast.error("Login Failed", { description: result.error });
     } else {
         toast.success("Login Successful", { description: "Redirecting to dashboard..." });
     }
@@ -56,6 +53,7 @@ const LoginForm = ({ onSwitchToSignup }) => {
             </p>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
+          
           {/* Role Selection */}
           <div className="space-y-2">
             <Label htmlFor="role">Role</Label>

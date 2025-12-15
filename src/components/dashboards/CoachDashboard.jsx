@@ -22,32 +22,45 @@ import {
   UserCheck,
   Target,
 } from "lucide-react";
-import { fetchCoachAssignedPlayers, recordAttendance, fetchSessionData } from "../../../api";
+
+// Assuming these imports are correct and point to your API functions
+import { fetchCoachAssignedPlayers, recordAttendance, fetchSessionData } from "../../../api"; 
+
+// --- Schedule Data Processing Function ---
 const processScheduleData = (sessions) => {
-  if (!Array.isArray(sessions)) return { todaysSchedule: [], weeklySchedule: [] };
+  // Defensive check for input
+  if (!Array.isArray(sessions) || sessions.length === 0) return { todaysSchedule: [], weeklySchedule: [] };
   
   const today = new Date();
+  // Ensure the locale is consistent, 'en-US' is generally safe
   const todayDayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' }); 
   
+  // 1. Today's Schedule
   const todaysSchedule = sessions
     .filter(s => s.day_of_week === todayDayOfWeek)
     .map(s => ({ 
       time: `${s.start_time.substring(0, 5)} - ${s.end_time.substring(0, 5)}`,
       group: s.group_category,
       location: s.location || "N/A",
-      status: s.status || "Scheduled",
+      // Assuming 'status' comes from API, default to 'Scheduled'
+      status: s.status || "Scheduled", 
     }));
 
+  // 2. Weekly Schedule
   const daysOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   
   const groupedByDay = sessions.reduce((acc, session) => {
     const day = session.day_of_week;
+    if (!day) return acc; // Skip if day_of_week is missing
+    
     if (!acc[day]) {
       acc[day] = [];
     }
     acc[day].push(`${session.start_time.substring(0, 5)} - ${session.end_time.substring(0, 5)} (${session.group_category})`);
     return acc;
   }, {});
+
+  // Sort and filter the weekly schedule based on daysOrder
   const weeklySchedule = daysOrder
     .filter(day => groupedByDay[day] && groupedByDay[day].length > 0)
     .map(day => ({
@@ -59,6 +72,7 @@ const processScheduleData = (sessions) => {
 };
 
 
+// --- Coach Dashboard Component ---
 const CoachDashboard = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const { user, session, isLoading: isAuthLoading, logout } = useAuth(); 
@@ -100,7 +114,7 @@ const CoachDashboard = () => {
 
     try {
       const submissionPromises = assignedPlayers.map((player) => {
-        const isPresent = (localAttendance[player.id] || "present") === "present";
+        const isPresent = (localAttendance[player.id] || "present") === "present"; 
 
         const payload = {
           playerId: player.id,
@@ -119,6 +133,9 @@ const CoachDashboard = () => {
         description: `Attendance recorded for ${results.length} players on ${dateString}.`,
         variant: "success", 
       });
+
+      // Reset local attendance after successful submission (optional, but good practice)
+      // setLocalAttendance({}); 
 
     } catch (error) {
       console.error("Attendance Submission Failed:", error);
@@ -149,6 +166,7 @@ const CoachDashboard = () => {
   const averageAttendance = useMemo(() => {
     if (!assignedPlayers || assignedPlayers.length === 0) return 0;
     const total = assignedPlayers.reduce((sum, p) => {
+      // Robustly handle 'attendance' property
       const att =
         typeof p.attendance === "number"
           ? p.attendance
@@ -158,6 +176,7 @@ const CoachDashboard = () => {
     return Math.round(total / assignedPlayers.length);
   }, [assignedPlayers]);
 
+  // --- Players Fetching Effect ---
   useEffect(() => {
     if (isAuthLoading || !user || !token) { 
       setAssignedPlayers([]);
@@ -194,8 +213,9 @@ const CoachDashboard = () => {
     return () => {
       isMounted = false;
     };
-  }, [isAuthLoading, user, token]); 
+  }, [isAuthLoading, user, token, toast]); 
 
+  // --- Schedule Fetching Effect ---
   useEffect(() => {
     if (!user?.id || !token) { 
         setSchedule({ today: [], weekly: [] });
@@ -208,10 +228,15 @@ const CoachDashboard = () => {
     const fetchSchedule = async () => {
         setIsLoadingSchedule(true);
         try {
+            // Log for debugging: ensure user.id and token are available
+            // console.log("Fetching schedule for coach:", user.id); 
             const data = await fetchSessionData(user.id, token); 
+            // console.log("Received schedule data:", data); // Check the raw data structure here
+            
             if (!isMounted) return;
 
             const { todaysSchedule, weeklySchedule } = processScheduleData(data); 
+            // console.log("Processed schedule:", { todaysSchedule, weeklySchedule });
 
             setSchedule({
                 today: todaysSchedule, 
@@ -219,7 +244,12 @@ const CoachDashboard = () => {
             });
         } catch (error) {
             console.error("Dashboard failed to load schedule:", error);
-            if (isMounted) setSchedule({ today: [], weekly: [] });
+            toast({
+                title: "Schedule Fetch Error",
+                description: `Failed to load schedule. Check network/API: ${error.message.substring(0, 80)}...`,
+                variant: "destructive"
+            });
+            if (isMounted) setIsLoadingSchedule(false);
         } finally {
             if (isMounted) setIsLoadingSchedule(false);
         }
@@ -230,8 +260,8 @@ const CoachDashboard = () => {
     return () => {
         isMounted = false;
     };
-  }, [user, token]); 
-  
+  }, [user, token, toast]); // Dependency added: toast
+
   const { today: todaysSchedule, weekly: weeklySchedule } = schedule;
 
   if (isAuthLoading) {
@@ -243,7 +273,8 @@ const CoachDashboard = () => {
   }
 
   if (!user) {
-    return null;
+    // If auth is done but no user, redirect or display a login prompt
+    return null; // Or <Navigate to="/auth" replace /> if you use react-router-dom v6
   }
 
 
@@ -442,7 +473,7 @@ const CoachDashboard = () => {
                     </div>
                 ) : todaysSchedule.length === 0 ? (
                     <div className="p-4 text-center text-muted-foreground">
-                        No sessions scheduled for today.
+                        No sessions scheduled for today ({new Date().toLocaleDateString('en-US', { weekday: 'long' })}).
                     </div>
                 ) : (
                     <div className="space-y-3">
@@ -518,7 +549,7 @@ const CoachDashboard = () => {
                   Mark Attendance
                 </CardTitle>
                 <CardDescription>
-                  Mark players' attendance for current session.
+                  Mark players' attendance for the selected date: **{selectedDate.toLocaleDateString()}**.
                 </CardDescription>
               </CardHeader>
               <CardContent>

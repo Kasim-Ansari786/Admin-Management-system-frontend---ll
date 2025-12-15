@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from "react";
-// Ensure you have xlsx installed: npm install xlsx
 import * as XLSX from "xlsx";
 import {
   Download,
@@ -11,8 +10,12 @@ import {
   ChevronRight,
   Eye,
 } from "lucide-react";
-// Ensure uploadRegistrations and GetregistrationsData are correctly imported
-import { GetregistrationsData, uploadRegistrations, updateRegistrationData, deleteRegistration } from "../../../api";
+import {
+  GetregistrationsData,
+  uploadRegistrations,
+  updateRegistrationData,
+  deleteRegistration,
+} from "../../../api";
 
 import {
   Table,
@@ -28,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 
-// Import the missing dialog components
+
 import {
   Dialog,
   DialogContent,
@@ -38,12 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// You might need to import a Select component for better styling.
-// For simplicity, this example uses a basic <select> element in the JSX.
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-
-// Set the number of records to display per page
 const RECORDS_PER_PAGE = 8;
 
 const PendingRegistrations = () => {
@@ -51,8 +49,7 @@ const PendingRegistrations = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  // NEW STATE: Filter by Status
-  const [filterStatus, setFilterStatus] = useState("All"); 
+  const [filterStatus, setFilterStatus] = useState("All");
 
   const fileInputRef = useRef(null);
   const { toast } = useToast();
@@ -132,6 +129,7 @@ const handleApprove = async () => {
     }
   };
 
+
   // ----------------------------------------------------
   // FETCH REGISTRATIONS
   // ----------------------------------------------------
@@ -139,30 +137,52 @@ const handleApprove = async () => {
     setIsLoading(true);
     setCurrentPage(1);
     // Reset filter when fetching fresh data
-    setFilterStatus("All"); 
+    setFilterStatus("All");
 
     try {
       const response = await GetregistrationsData();
 
-      // Assuming the API returns an array under the 'data' key
-      const apiDataArray = response?.data || [];
+      // Normalize possible response shapes
+      let apiDataArray = [];
+      if (Array.isArray(response)) {
+        apiDataArray = response;
+      } else if (Array.isArray(response?.data)) {
+        apiDataArray = response.data;
+      } else if (Array.isArray(response?.registrations)) {
+        apiDataArray = response.registrations;
+      } else if (Array.isArray(response?.rows)) {
+        apiDataArray = response.rows;
+      } else {
+        apiDataArray = [];
+      }
 
-      const formatted = apiDataArray.map((reg, index) => ({
-        id: reg.regist_id ?? index + 1,
-        name: reg.name ?? "",
-        phoneNumber: reg.phone_number ?? "",
-        email: reg.email_id ?? "",
-        address: reg.address ?? "",
-        age: reg.age ?? 0,
-        // Ensure date is displayed cleanly
-        applicationDate: reg.application_date
-          ? String(reg.application_date).split("T")[0]
-          : "",
-        parentName: reg.parent_name ?? "",
-        active: reg.active,
-        // Key is 'Status' (capital S)
-        Status: reg.status,
-      }));
+      const formatted = apiDataArray.map((reg, index) => {
+        let statusString = reg.status || reg.Status || "Pending";
+        if (
+          typeof statusString === "object" &&
+          statusString !== null &&
+          statusString.status
+        ) {
+          statusString = statusString.status;
+        }
+
+        return {
+          // Use a stable ID if available, otherwise use index for key
+          id: reg.regist_id ?? reg.registId ?? reg.email_id ?? index + 1,
+          name: reg.name ?? "",
+          phoneNumber: reg.phone_number ?? "",
+          email: reg.email_id ?? "",
+          address: reg.address ?? "",
+          age: reg.age ?? 0,
+          applicationDate: reg.application_date
+            ? String(reg.application_date).split("T")[0]
+            : "",
+          parentName: reg.parent_name ?? "",
+          active: reg.active,
+          // Use the cleaned string status
+          Status: statusString,
+        };
+      });
       setRegistrations(formatted);
     } catch (error) {
       console.error("Error loading registrations:", error);
@@ -198,13 +218,10 @@ const handleApprove = async () => {
 
     try {
       setIsLoading(true);
-      // CALL THE BACKEND API TO BULK UPLOAD THE DATA
       const result = await uploadRegistrations(dataToSave);
 
-      // NOTE: Assuming result has a structure like { inserted: number }
       recordsInserted = result.inserted;
 
-      // Refresh the list to show the newly added data
       await fetchRegistrations();
 
       if (recordsInserted === totalRecordsAttempted) {
@@ -213,7 +230,6 @@ const handleApprove = async () => {
           description: `${recordsInserted} records successfully imported.`,
         });
       } else if (recordsInserted > 0) {
-        // Partial success, due to ON CONFLICT DO NOTHING
         toast({
           title: "Partial Import Success",
           description: `${recordsInserted} records were inserted. ${
@@ -222,7 +238,6 @@ const handleApprove = async () => {
           variant: "default",
         });
       } else {
-        // 0 records inserted
         toast({
           title: "No Records Inserted",
           description:
@@ -258,7 +273,6 @@ const handleApprove = async () => {
         const workbook = XLSX.read(event.target.result, { type: "binary" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-        // Read data as an array of arrays (more reliable than JSON for cleanup)
         const rawRows = XLSX.utils.sheet_to_json(sheet, {
           header: 1,
           defval: null,
@@ -268,8 +282,6 @@ const handleApprove = async () => {
           throw new Error("File is empty or contains no data rows.");
         }
 
-        // The first row is the header, clean it up to match expected keys
-        // Converts "Application Date" to "application_date"
         const header = rawRows[0].map((h) =>
           String(h)
             .trim()
@@ -284,22 +296,17 @@ const handleApprove = async () => {
             header.forEach((key, colIndex) => {
               let value = row[colIndex];
 
-              // Handle Excel date numbers (a common source of errors)
               if (typeof value === "number" && key.includes("date")) {
-                // Convert Excel Date Number to JS Date object
                 const date = XLSX.SSF.parse_date_code(value);
-                // Format to YYYY-MM-DD
                 value = `${date.y}-${String(date.m).padStart(2, "0")}-${String(
                   date.d
                 ).padStart(2, "0")}`;
               }
 
-              // Clean up values: trim strings, parse numbers
               if (typeof value === "string") {
                 value = value.trim();
               }
 
-              // Map to required snake_case database fields with flexible column names
               switch (key) {
                 case "name":
                 case "full_name":
@@ -317,12 +324,10 @@ const handleApprove = async () => {
                   rowData.address = value || null;
                   break;
                 case "age":
-                  // Convert to integer, default to 0 if invalid (or null if database allows null)
                   rowData.age = parseInt(value, 10) || 0;
                   break;
                 case "application_date":
                 case "date":
-                  // Ensure it's a clean YYYY-MM-DD format (or null)
                   rowData.application_date =
                     String(value || "").substring(0, 10) || null;
                   break;
@@ -335,8 +340,6 @@ const handleApprove = async () => {
               }
             });
 
-            // CRITICAL VALIDATION: Check for data integrity before sending to DB
-            // If any mandatory field is missing, skip the row
             if (!rowData.name || !rowData.email_id || !rowData.phone_number) {
               console.warn(
                 `Skipping row ${
@@ -346,7 +349,6 @@ const handleApprove = async () => {
               return null;
             }
 
-            // Return the object matching the database columns
             return {
               name: rowData.name,
               phone_number: rowData.phone_number,
@@ -357,7 +359,7 @@ const handleApprove = async () => {
               parent_name: rowData.parent_name,
             };
           })
-          .filter((reg) => reg !== null); // Remove skipped/invalid rows
+          .filter((reg) => reg !== null);
 
         if (formatted.length > 0) {
           handleSaveImportedData(formatted);
@@ -377,7 +379,6 @@ const handleApprove = async () => {
           variant: "destructive",
         });
       } finally {
-        // Clear the file input after processing
         e.target.value = null;
       }
     };
@@ -386,7 +387,7 @@ const handleApprove = async () => {
   };
 
   // ----------------------------------------------------
-  // EXPORT EXCEL (No change needed)
+  // EXPORT EXCEL
   // ----------------------------------------------------
   const handleExport = () => {
     if (registrations.length === 0) {
@@ -406,7 +407,7 @@ const handleApprove = async () => {
       Age: reg.age,
       Application_Date: reg.applicationDate,
       Parent_Name: reg.parentName,
-      Status: reg.Status, // Include Status in export
+      Status: reg.Status,
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -420,61 +421,66 @@ const handleApprove = async () => {
   };
 
   // ----------------------------------------------------
-  // DELETE (Rejection API call is performed here)
-const handleDelete = async (id) => {
+  // DELETE
+  // ----------------------------------------------------
+  const handleDelete = async (id) => {
     try {
       await deleteRegistration(id);
-      setRegistrations((prev) => prev.filter((r) => r.id !== id));
-      const totalItemsAfterDeletion = filteredRegistrations.length - 1;
-      
+
+      const newRegistrations = registrations.filter((r) => r.id !== id);
+      setRegistrations(newRegistrations);
+
+      const totalItemsAfterDeletion = newRegistrations.filter(
+        (reg) =>
+          reg.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          reg.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (reg.phoneNumber.includes(searchQuery) &&
+            (filterStatus === "All" || reg.Status === filterStatus))
+      ).length;
+
       if (
         totalItemsAfterDeletion <= (currentPage - 1) * RECORDS_PER_PAGE &&
         currentPage > 1
       ) {
         setCurrentPage((prev) => prev - 1);
-      }     
-      
+      }
+
       toast({
         title: "Success",
         description: `Registration ${id} successfully deleted.`,
       });
-
     } catch (error) {
-      console.error("Deletion failed:", error.message);    
+      console.error("Deletion failed:", error.message);
       toast({
         title: "Error",
         description: `Failed to delete registration ${id}.`,
         variant: "destructive",
       });
     }
-};
+  };
 
   // ----------------------------------------------------
   // SEARCH & FILTER LOGIC
+  // ----------------------------------------------------
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
     setCurrentPage(1);
   };
-  
+
   const handleFilterStatusChange = (e) => {
     setFilterStatus(e.target.value);
-    setCurrentPage(1); 
-  }
+    setCurrentPage(1);
+  };
 
+  const filteredRegistrations = registrations.filter((reg) => {
+    const searchMatch =
+      reg.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      reg.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      reg.phoneNumber.includes(searchQuery);
+    const statusMatch = filterStatus === "All" || reg.Status === filterStatus;
 
-  const filteredRegistrations = registrations.filter(
-    (reg) => {
-      const searchMatch = 
-        reg.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        reg.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        reg.phoneNumber.includes(searchQuery); 
-      const statusMatch = 
-        filterStatus === 'All' || 
-        reg.Status === filterStatus;
-
-      return searchMatch && statusMatch;
-    }
-  );
+    return searchMatch && statusMatch;
+  });
 
   // ----------------------------------------------------
   // PAGINATION LOGIC
@@ -495,6 +501,50 @@ const handleDelete = async (id) => {
     setCurrentPage((prev) => Math.min(totalPages, prev + 1));
   };
 
+
+  const handleDownload = () => {
+  if (!registrations || registrations.length === 0) {
+    toast({
+      title: "No Data to Export",
+      description: "The registration list is currently empty.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  const dataToExport = registrations.map((reg, index) => ({
+   
+    Name: reg.name || "",
+    "Phone Number": reg.phoneNumber || "",
+    "Email ID": reg.email || "",
+    Address: reg.address || "",
+    Age: reg.age || "",
+    "Application Date": reg.applicationDate || "",
+    "Parent Name": reg.parentName || "",
+    
+  }));
+
+  try {
+    const ws = XLSX.utils.json_to_sheet(dataToExport, { origin: "A2" });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Registrations");
+    XLSX.writeFile(wb, "Registrations_Data_Export.xlsx");
+    toast({
+      title: "Download Complete",
+      description: "The registration data has been downloaded successfully.",
+    });
+
+  } catch (error) {
+    console.error("Excel Export Error:", error);
+    toast({
+      title: "Download Failed",
+      description: "There was an error exporting the data to Excel.",
+      variant: "destructive",
+    });
+  }
+};
+
+
   return (
     <Card>
       <CardHeader>
@@ -512,18 +562,17 @@ const handleDelete = async (id) => {
               className="pl-10"
             />
           </div>
-          
-          <select 
-              value={filterStatus} 
-              onChange={handleFilterStatusChange}
-              className="border rounded-md px-4 py-2 text-sm bg-background shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-              <option value="All">All Statuses</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-          </select>
 
+          <select
+            value={filterStatus}
+            onChange={handleFilterStatusChange}
+            className="border rounded-md px-4 py-2 text-sm bg-background shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value="All">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+          </select>
 
           <input
             ref={fileInputRef}
@@ -549,11 +598,20 @@ const handleDelete = async (id) => {
             disabled={registrations.length === 0 || isLoading}
           >
             <Download className="h-4 w-4 mr-2" />
+            Download Excel
+          </Button>
+
+          <Button
+            variant="secondary"
+            onClick={handleDownload}
+            className="flex items-center gap-2"
+            disabled={registrations.length === 0 || isLoading} 
+          >
+            <Download className="h-4 w-4" />
             Sample Excel
           </Button>
         </div>
 
-     
         {isLoading ? (
           <div className="text-center py-12 text-muted-foreground border rounded-lg">
             <Loader2 className="h-6 w-6 animate-spin mx-auto mb-3" />
@@ -599,19 +657,24 @@ const handleDelete = async (id) => {
                       <TableCell>{reg.age}</TableCell>
                       <TableCell>{reg.applicationDate}</TableCell>
                       <TableCell>{reg.parentName}</TableCell>
-                      {/* FIX: Use reg.Status (capital S) */}
+
+                      {/* START OF FIX: Ensure Pending status gets yellow badge styling */}
                       <TableCell>
-                        {reg.Status ? (
-                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                reg.Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                                reg.Status === 'Approved' ? 'bg-green-100 text-green-800' :
-                                'bg-red-100 text-red-800'
-                            }`}>
-                                {reg.Status}
-                            </span>
-                        ) : 'Pending'}
+                        <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            reg.Status === "Approved"
+                              ? "bg-green-100 text-green-800"
+                              : reg.Status === "Rejected"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-yellow-100 text-yellow-800" 
+                          }`}
+                        >
+                          {reg.Status || "Pending"}
+                        </span>
                       </TableCell>
-                      <TableCell className="text-right">                        
+                      {/* END OF FIX */}
+
+                      <TableCell className="text-right">
                         <Button
                           variant="outline"
                           size="icon"
@@ -621,8 +684,7 @@ const handleDelete = async (id) => {
                           <Eye className="h-4 w-4" />
                         </Button>
 
-                        
-                        {reg.Status !== 'Approved' && (
+                        {reg.Status !== "Approved" && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -667,7 +729,8 @@ const handleDelete = async (id) => {
         )}
         {registrations.length > 0 && (
           <div className="mt-4 text-sm text-muted-foreground">
-            Showing {filteredRegistrations.length} records based on filter and search.
+            Showing {filteredRegistrations.length} records based on filter and
+            search.
           </div>
         )}
 
@@ -723,15 +786,15 @@ const handleDelete = async (id) => {
               </div>
             )}
             <DialogFooter className="gap-2 sm:gap-0">
-              <Button 
-                variant="destructive" 
+              <Button
+                variant="destructive"
                 onClick={handleReject}
                 disabled={isLoading} // Disable while processing
               >
                 Reject
               </Button>
-              <Button 
-                variant="default" 
+              <Button
+                variant="default"
                 onClick={handleApprove}
                 disabled={isLoading} // Disable while processing
               >
