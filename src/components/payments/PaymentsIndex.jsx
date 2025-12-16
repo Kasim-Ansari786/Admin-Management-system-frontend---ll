@@ -471,21 +471,20 @@ export default function Index() {
                       <FileText className="h-4 w-4 mr-2" />
                       Generate Payment Report
                     </Button>
-                    <Button
+                    {/* <Button
                       variant="outline"
                       className="w-full justify-start"
                       onClick={() => setScheduleOpen(true)}
                     >
                       <Calendar className="h-4 w-4 mr-2" />
                       Payment Schedule
-                    </Button>
+                    </Button> */}
                   </div>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
-          {/* Transactions/Records Tab Content */}
           <TabsContent value="transactions" className="space-y-4">
             <Card className="shadow-card">
               <CardHeader>
@@ -494,7 +493,6 @@ export default function Index() {
                     <CreditCard className="h-5 w-5 text-primary" />
                     Payment Records
                   </CardTitle>
-                  {/* *** ADD NEW RECORD BUTTON, which triggers the dialog *** */}
                   <Button
                     onClick={() => setAddRecordOpen(true)}
                     className="flex items-center gap-2"
@@ -568,7 +566,7 @@ export default function Index() {
                             <TableRow
                               key={record.id}
                               className={
-                                overdue && record.status !== "paid" // Only highlight if overdue AND not paid
+                                overdue && record.status !== "paid" 
                                   ? "bg-destructive/5 hover:bg-destructive/10"
                                   : "hover:bg-muted/50"
                               }
@@ -584,7 +582,7 @@ export default function Index() {
                                 {formatDate(record.joinDate)}
                               </TableCell>
                               <TableCell className="font-semibold">
-                                {/* Format currency here */}₹
+                               ₹
                                 {record.paymentAmount.toLocaleString("en-IN")}
                               </TableCell>
                               <TableCell>
@@ -605,7 +603,6 @@ export default function Index() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    // *** FIX APPLIED HERE: Pass the full 'record' object ***
                                     onClick={() => handleEdit(record)}
                                     className="text-primary hover:text-primary"
                                   >
@@ -645,7 +642,6 @@ export default function Index() {
                                         <AlertDialogCancel>
                                           Cancel
                                         </AlertDialogCancel>
-                                        {/* Updated onClick to use the corrected onDelete function */}
                                         <AlertDialogAction
                                           onClick={() => onDelete(record.id)}
                                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
