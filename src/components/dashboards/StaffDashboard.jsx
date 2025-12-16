@@ -1,10 +1,17 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { useAuth } from "@/contexts/AuthContext";
-import PendingRegistrationsComponent from "@/components/dashboards/PendingRegistrations"; 
+import PendingRegistrationsComponent from "@/components/dashboards/PendingRegistrations";
 import AssignST from "../../pages/AssignST";
 import Venues from "@/components/dashboards/Venues";
+import PaymentsIndex from "@/components/payments/PaymentsIndex";
 
 import {
   MapPin,
@@ -62,7 +69,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-
 import {
   GetPlayerDetails,
   deletePlayer,
@@ -74,32 +80,29 @@ import {
   fetchVenuesdetails, // VENUES API IMPORT
 } from "../../../api";
 
-
 const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
   const [formData, setFormData] = useState(
     coachToEdit || {
       coach_id: null,
-      coach_name: "", 
+      coach_name: "",
       phone_numbers: "",
       email: "",
       address: "",
       players: 0,
       salary: 0,
       week_salary: 0,
-      category: "", 
+      category: "",
       status: "Active",
-      active: true, 
+      active: true,
     }
   );
 
- 
- 
   const [isSaving, setIsSaving] = useState(false);
   const handleActiveChange = (checked) => {
     setFormData((prev) => ({
       ...prev,
       active: checked,
-      status: checked ? "Active" : "Inactive", 
+      status: checked ? "Active" : "Inactive",
     }));
   };
 
@@ -111,8 +114,7 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
             active: coachToEdit.status === "Active",
           }
         : {
-            
-            coach_id: null, 
+            coach_id: null,
             coach_name: "",
             phone_numbers: "",
             email: "",
@@ -133,7 +135,6 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
     setFormData((prev) => ({
       ...prev,
       [id]:
-      
         id === "players" ||
         id === "salary" ||
         id === "week_salary" ||
@@ -147,7 +148,7 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
     e.preventDefault();
     setIsSaving(true);
     await onSave(formData);
-    setIsSaving(false); 
+    setIsSaving(false);
   };
 
   const title = formData.coach_id ? "Edit Coach" : "Add New Coach";
@@ -273,7 +274,6 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
   );
 };
 
-
 const RegistrationReviewDialog = ({ isOpen, onClose, registration }) => {
   const { toast } = useToast();
 
@@ -357,7 +357,6 @@ const RegistrationReviewDialog = ({ isOpen, onClose, registration }) => {
     </Dialog>
   );
 };
-
 
 const DeleteConfirmationDialog = ({ isOpen, onClose, onConfirm, name }) => {
   return (
@@ -576,7 +575,7 @@ const StaffDashboard = () => {
 
   // --- VENUES STATE (FIXED) ---
   const [venues, setVenues] = useState([]);
-  const [isVenuesLoading, setIsVenuesLoading] = useState(true); 
+  const [isVenuesLoading, setIsVenuesLoading] = useState(true);
   const [venuesError, setVenuesError] = useState(null);
 
   // --- Search & Filter States (No Change) ---
@@ -585,7 +584,7 @@ const StaffDashboard = () => {
 
   // --- Pagination State (No Change) ---
   const [currentPage, setCurrentPage] = useState(1);
-  const playersPerPage = 5; 
+  const playersPerPage = 5;
 
   const [isCoachModalOpen, setIsCoachModalOpen] = useState(false);
   const [editingCoach, setEditingCoach] = useState(null);
@@ -594,7 +593,7 @@ const StaffDashboard = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState(null);
   const { authToken } = useAuth();
-  
+
   // --- EXCEL IMPORT/EXPORT LOGIC (No Change) ---
   const bulkImportApi = async (file) => {
     const formData = new FormData();
@@ -793,7 +792,7 @@ const StaffDashboard = () => {
 
         setTimeout(() => {
           window.location.reload();
-        }, 500); 
+        }, 500);
       } catch (error) {
         console.error("Error deleting coach:", error);
         toast({
@@ -805,7 +804,7 @@ const StaffDashboard = () => {
         });
       }
     },
-    [toast] 
+    [toast]
   );
 
   // --- Player Delete Logic (No Change) ---
@@ -844,13 +843,16 @@ const StaffDashboard = () => {
     setRegistrationsError(null);
     try {
       const responseData = await GetregistrationsData();
-      const registrationArray = responseData.data || responseData || [];
-      
+      const registrationArray = responseData.registrations || responseData.data || responseData || [];
+
       if (Array.isArray(registrationArray)) {
-          setAllRegistrations(registrationArray);
+        setAllRegistrations(registrationArray);
       } else {
-          console.error("GetregistrationsData did not return an array:", responseData);
-          setAllRegistrations([]);
+        console.error(
+          "GetregistrationsData did not return an array:",
+          responseData
+        );
+        setAllRegistrations([]);
       }
     } catch (err) {
       console.error("Failed to fetch registrations data:", err);
@@ -858,13 +860,13 @@ const StaffDashboard = () => {
     } finally {
       setIsRegistrationsLoading(false); // Stop loading
     }
-  }, []); 
+  }, []);
 
   // --- Effect to fetch registrations data (No Change) ---
   useEffect(() => {
     fetchRegistrationsData();
   }, [fetchRegistrationsData]);
-  
+
   // --- Function: Fetch Venues Data (FIXED) ---
   const fetchVenuesData = useCallback(async () => {
     setIsVenuesLoading(true);
@@ -874,10 +876,13 @@ const StaffDashboard = () => {
       const venuesArray = responseData.data || responseData || [];
 
       if (Array.isArray(venuesArray)) {
-          setVenues(venuesArray);
+        setVenues(venuesArray);
       } else {
-          console.error("fetchVenuesdetails did not return an array:", responseData);
-          setVenues([]);
+        console.error(
+          "fetchVenuesdetails did not return an array:",
+          responseData
+        );
+        setVenues([]);
       }
     } catch (err) {
       console.error("Failed to fetch venues data:", err);
@@ -885,13 +890,12 @@ const StaffDashboard = () => {
     } finally {
       setIsVenuesLoading(false); // Stop loading
     }
-  }, []); 
+  }, []);
 
   // --- Effect to fetch venues data (No Change) ---
   useEffect(() => {
     fetchVenuesData();
   }, [fetchVenuesData]);
-
 
   const fetchCoachData = useCallback(async () => {
     setIsLoading(true);
@@ -912,7 +916,6 @@ const StaffDashboard = () => {
         status: coach.status,
       }));
 
- 
       setCoaches(mappedData);
     } catch (err) {
       console.error("Failed to fetch coach data:", err);
@@ -921,8 +924,7 @@ const StaffDashboard = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []); 
-
+  }, []);
 
   useEffect(() => {
     fetchCoachData();
@@ -972,8 +974,6 @@ const StaffDashboard = () => {
   useEffect(() => {
     fetchPlayers();
   }, [fetchPlayers]);
-
-
 
   const handleSendReminders = () => {
     toast({
@@ -1094,8 +1094,6 @@ const StaffDashboard = () => {
     }
   };
 
-  
-
   const handleTabChange = (newTab) => {
     if (validTabs.includes(newTab)) {
       setActiveTab(newTab);
@@ -1104,12 +1102,12 @@ const StaffDashboard = () => {
   };
 
   // --- CALCULATIONS AND DISPLAY LOGIC (FIXED) ---
-  
+
   // 1. Pending Registrations Count Logic
   const pendingRegistrationsCount = useMemo(() => {
     if (!Array.isArray(allRegistrations)) return 0;
-    
-    return allRegistrations.filter(reg => {
+
+    return allRegistrations.filter((reg) => {
       const status = reg?.status;
       // Filter for statuses containing "pending" (case-insensitive)
       if (typeof status === "string") {
@@ -1126,14 +1124,14 @@ const StaffDashboard = () => {
   ) : (
     pendingRegistrationsCount
   );
-  
+
   // 2. Active Venues Count Logic
   const activeVenuesCount = useMemo(() => {
     if (!Array.isArray(venues)) return 0;
 
-    return venues.filter(venue =>
-      // Assuming a 'status' field exists and 'Active' means operational
-      venue?.status?.toLowerCase() === "active" || venue?.active === true 
+    return venues.filter(
+      (venue) =>
+        venue?.status?.toLowerCase() === "active" || venue?.active === true
     ).length;
   }, [venues]);
 
@@ -1144,7 +1142,6 @@ const StaffDashboard = () => {
   ) : (
     activeVenuesCount
   );
-
 
   return (
     <div className="space-y-6">
@@ -1187,7 +1184,7 @@ const StaffDashboard = () => {
       </div>
 
       {/* Data Cards Grid (FIXED) */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {/* Pending Registrations Card - FIXED */}
         <Card className="shadow-card">
           <CardContent className="p-4">
@@ -1196,7 +1193,7 @@ const StaffDashboard = () => {
               <div>
                 <p className="text-2xl font-bold">
                   {/* USE THE FIXED DISPLAY LOGIC */}
-                  {pendingCountDisplay} 
+                  {pendingCountDisplay}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Pending Registrations
@@ -1226,7 +1223,7 @@ const StaffDashboard = () => {
         </Card>
 
         {/* Monthly Revenue Card */}
-        <Card className="shadow-card">
+        {/* <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <IndianRupee className="h-5 w-5 text-success" />
@@ -1238,7 +1235,7 @@ const StaffDashboard = () => {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
 
         {/* Completion Rate Card */}
         <Card className="shadow-card">
@@ -1277,7 +1274,7 @@ const StaffDashboard = () => {
               <MapPin className="h-5 w-5 text-blue-600" />
               <div>
                 <p className="text-2xl font-bold">
-                    {venuesCountDisplay} {/* FIXED TO USE DYNAMIC COUNT */}
+                  {venuesCountDisplay} {/* FIXED TO USE DYNAMIC COUNT */}
                 </p>
                 <p className="text-xs text-muted-foreground">Active Venues</p>
               </div>
@@ -1308,17 +1305,10 @@ const StaffDashboard = () => {
           <Venues />
         </TabsContent>
 
-        {/* Registrations Content - FIX APPLIED HERE */}
+        {/* Registrations Content */}
         <TabsContent value="registrations">
-          {/* FIX: Pass the fetched registrations data, loading state, and error state 
-            to the PendingRegistrationsComponent so it can properly display the list.
-          */}
-          <PendingRegistrationsComponent 
-            registrations={allRegistrations} 
-            isLoading={isRegistrationsLoading} 
-            error={registrationsError}
-            onRefresh={fetchRegistrationsData} // Allow child component to re-fetch
-          /> 
+          {/* Using the component you imported */}
+          <PendingRegistrationsComponent />
         </TabsContent>
 
         {/* Assigned Content */}
@@ -1467,95 +1457,8 @@ const StaffDashboard = () => {
         </TabsContent>
 
         {/* Payments Content (Simplified) */}
-        <TabsContent value="payments" className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Payment Overview
-                </CardTitle>
-                <CardDescription>
-                  Monthly payment collection status
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {paymentOverview.map((payment, index) => (
-                    <div key={payment?.month ?? index} className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>{payment.month}</span>
-                        <span className="font-medium">
-                          ₹{Number(payment.total ?? 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <Progress
-                        value={(payment.collected / payment.total) * 100}
-                        className="h-2"
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>
-                          Collected: ₹
-                          {Number(payment.collected ?? 0).toLocaleString()}
-                        </span>
-                        <span>
-                          Pending: ₹
-                          {Number(payment.pending ?? 0).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Payment Actions
-                </CardTitle>
-                <CardDescription>
-                  Manage payment reminders and reports
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Button
-                    className="w-full justify-start"
-                    onClick={handleSendReminders}
-                  >
-                    <IndianRupee className="h-4 w-4 mr-2" />
-                    Send Payment Reminders
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={handleGenerateReport}
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Generate Payment Report
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={handlePaymentSettings}
-                  >
-                    <Settings className="h-4 w-4 mr-2" />
-                    Payment Settings
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={handlePaymentSchedule}
-                  >
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Payment Schedule
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+         <TabsContent value="payments">
+        <PaymentsIndex/>
         </TabsContent>
 
         {/* Coaches Content (Simplified) */}

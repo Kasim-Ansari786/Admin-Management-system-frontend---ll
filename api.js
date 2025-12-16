@@ -1172,3 +1172,191 @@ export const deleteSession = async (session_id) => {
     throw error;
   }
 };
+
+//fetch the payment details
+export const getPayments = async () => {
+  try {
+    // Use shared `api` instance so Authorization header + refresh logic apply
+    const response = await api.get('/api/payments');
+    return response.data?.data ?? response.data ?? [];
+  } catch (error) {
+    console.error("Error fetching payment details:", error?.response ?? error.message ?? error);
+    const status = error?.response?.status;
+    if (status === 401 || status === 403) {
+      throw new Error('Unauthorized. Please log in again.');
+    }
+    throw new Error(error.response?.data?.message || error.message || 'Failed to fetch payment records.');
+  }
+};
+
+//Add the payment records 
+export const addpayment = async (payment) => {
+    try {
+        const response = await axios.post(`${API_URL}/api/payment`, payment, {
+            headers: getAuthHeaders(),
+            withCredentials: true,
+        });
+        
+        // Correctly extract the data object returned by the server
+        return response.data.data; 
+
+    } catch (error) {
+        console.error("Error adding payment details:", error); 
+        // Throw a clearer error for the frontend
+        throw new Error(error.response?.data?.message || error.message);
+    }
+};
+
+export const getPaymentsdetails = async () => {
+  try {
+    const response = await api.get('/api/payments');
+    return response.data?.data ?? response.data ?? [];
+  } catch (error) {
+    console.error("Error fetching payment details:", error?.response ?? error.message ?? error);
+    throw new Error(error.response?.data?.message || error.message || 'Failed to fetch payment records.');
+  }
+};
+
+// download the payment receiptexport const downloadPaymentReceipt = async (paymentId) => {
+export const getPaymentsExceldata = async () => {
+  try {
+    const response = await api.get('/api/payments');
+    return response.data?.data ?? response.data ?? [];
+  } catch (error) {
+    console.error("Error fetching payment details for export:", error?.response ?? error.message ?? error);
+    const status = error?.response?.status;
+    if (status === 401 || status === 403) {
+      throw new Error('Unauthorized. Please log in again.');
+    }
+    throw new Error(error.response?.data?.message || error.message || 'Failed to fetch payment records.');
+  }
+};
+
+//delete the payment details
+export const deletePayment = async (paymentId) => {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/payment/deactivate/${paymentId}`,
+      {
+        method: "PUT", 
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+      }
+    );
+
+    if (response.ok || response.status === 204) {
+      return { success: true, id: paymentId };
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    let parsed;
+    if (contentType.includes("application/json")) {
+      try {
+        parsed = await response.json();
+      } catch (e) {
+        parsed = { message: `Server error: ${response.status}` };
+      }
+    } else {
+      parsed = await response.text();
+    }
+
+    throw new Error(parsed.message || parsed || `Request failed with status ${response.status}`);
+  } catch (error) {
+    console.error(`❌ Error deleting payment ${paymentId}:`, error);
+    throw error; 
+  }
+};
+
+
+//update the payment details
+export const updatePayment = async (paymentId, paymentData) => {
+    try {
+        const response = await fetch(
+            `${API_URL}/api/payment/${paymentId}`,
+            {
+                method: "PUT", 
+                headers: {
+                    "Content-Type": "application/json",
+                    ...getAuthHeaders(), 
+                },
+                body: JSON.stringify(paymentData),
+            }
+        );
+
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: `HTTP error! Status: ${response.status}` }));
+            throw new Error(errorBody.error || errorBody.message || `Failed to update payment record ${paymentId}.`);
+        }
+
+        return response.json(); 
+    } catch (error) {
+        console.error(`❌ Error updating payment ${paymentId}:`, error);
+        throw error;
+    }
+};
+
+
+// Clear auth tokens and user data from storage
+export async function getPaymentDetailsupdated(paymentId) {
+    if (!paymentId) {
+        throw new Error("A payment ID must be provided.");
+    }
+    const url = `${API_URL}/api/payment/${paymentId}`;
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP error! Status: ${response.status}`);
+        }
+        return data;
+
+    } catch (error) {
+        console.error(`❌ Error fetching payment details for ID ${paymentId}:`, error);
+        throw error;
+    }
+}
+
+//fech the player details pending and paid payments
+export const getPaymentStatus = async () => {
+  try {
+    // Backend does not expose /api/payment-summary; fetch the payments list and derive a summary client-side
+    const response = await api.get('/api/payments');
+    const rows = response.data?.data ?? response.data ?? [];
+
+    const totalCount = Array.isArray(rows) ? rows.length : 0;
+    const totalAmount = Array.isArray(rows)
+      ? rows.reduce((s, r) => s + (Number(r.amount_paid) || 0), 0)
+      : 0;
+    const byStatus = Array.isArray(rows)
+      ? rows.reduce((acc, r) => {
+          const st = (r.status || 'unknown').toString();
+          acc[st] = (acc[st] || 0) + 1;
+          return acc;
+        }, {})
+      : {};
+
+    return {
+      totalCount,
+      totalAmount,
+      byStatus,
+      rows,
+    };
+  } catch (error) {
+    console.error("Error fetching payment details:", error?.response || error?.message || error);
+    const status = error?.response?.status;
+    if (status === 401 || status === 403) {
+      throw new Error('Unauthorized. Please log in again.');
+    }
+    const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch payment records.';
+    throw new Error(errorMessage);
+  }
+};

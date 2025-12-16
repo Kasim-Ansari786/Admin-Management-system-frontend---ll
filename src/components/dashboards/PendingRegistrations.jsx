@@ -31,7 +31,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 
-
 import {
   Dialog,
   DialogContent,
@@ -40,7 +39,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
 
 const RECORDS_PER_PAGE = 8;
 
@@ -68,7 +66,7 @@ const PendingRegistrations = () => {
     }
   };
 
-const handleApprove = async () => {
+  const handleApprove = async () => {
     if (!selectedRegistration) return;
 
     try {
@@ -81,11 +79,11 @@ const handleApprove = async () => {
         description: `Registration ${selectedRegistration.id} approved.`,
         variant: "success",
       });
-      
-      // Close dialog and refresh data 
+
+      // Close dialog and refresh data
       setIsDialogOpen(false);
       setSelectedRegistration(null);
-      await fetchRegistrations(); 
+      await fetchRegistrations();
     } catch (error) {
       console.error("Approval error:", error);
       toast({
@@ -128,7 +126,6 @@ const handleApprove = async () => {
       setIsLoading(false);
     }
   };
-
 
   // ----------------------------------------------------
   // FETCH REGISTRATIONS
@@ -501,49 +498,62 @@ const handleApprove = async () => {
     setCurrentPage((prev) => Math.min(totalPages, prev + 1));
   };
 
-
   const handleDownload = () => {
-  if (!registrations || registrations.length === 0) {
-    toast({
-      title: "No Data to Export",
-      description: "The registration list is currently empty.",
-      variant: "destructive",
-    });
-    return;
-  }
+    if (!registrations || registrations.length === 0) {
+      toast({
+        title: "No Data to Export",
+        description: "The registration list is currently empty.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const dataToExport = registrations.map((reg, index) => ({
-   
-    Name: reg.name || "",
-    "Phone Number": reg.phoneNumber || "",
-    "Email ID": reg.email || "",
-    Address: reg.address || "",
-    Age: reg.age || "",
-    "Application Date": reg.applicationDate || "",
-    "Parent Name": reg.parentName || "",
-    
-  }));
+    // Header row (A1)
+    const headers = [
+      "Name",
+      "Phone Number",
+      "Email ID",
+      "Address",
+      "Age",
+      "Application Date",
+      "Parent Name",
+    ];
 
-  try {
-    const ws = XLSX.utils.json_to_sheet(dataToExport, { origin: "A2" });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Registrations");
-    XLSX.writeFile(wb, "Registrations_Data_Export.xlsx");
-    toast({
-      title: "Download Complete",
-      description: "The registration data has been downloaded successfully.",
-    });
+    // Data rows (start from A2)
+    const dataToExport = registrations.map((reg, index) => ({
+      Name: reg.name || "",
+      "Phone Number": reg.phoneNumber || "",
+      "Email ID": reg.email || "",
+      Address: reg.address || "",
+      Age: reg.age || "",
+      "Application Date": reg.applicationDate || "",
+      "Parent Name": reg.parentName || "",
+    }));
 
-  } catch (error) {
-    console.error("Excel Export Error:", error);
-    toast({
-      title: "Download Failed",
-      description: "There was an error exporting the data to Excel.",
-      variant: "destructive",
-    });
-  }
-};
+    try {
+      const ws = XLSX.utils.aoa_to_sheet([headers]);
+      XLSX.utils.sheet_add_json(ws, dataToExport, {
+        origin: -1, // ✅ APPEND MODE (KEY FIX)
+        skipHeader: true, // ✅ Prevent duplicate headers
+      });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Registrations");
 
+      XLSX.writeFile(wb, "Registrations_Data_Export.xlsx");
+
+      toast({
+        title: "Download Complete",
+        description: "The registration data has been downloaded successfully.",
+      });
+    } catch (error) {
+      console.error("Excel Export Error:", error);
+      toast({
+        title: "Download Failed",
+        description: "There was an error exporting the data to Excel.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <Card>
@@ -605,7 +615,7 @@ const handleApprove = async () => {
             variant="secondary"
             onClick={handleDownload}
             className="flex items-center gap-2"
-            disabled={registrations.length === 0 || isLoading} 
+            disabled={registrations.length === 0 || isLoading}
           >
             <Download className="h-4 w-4" />
             Sample Excel
@@ -666,7 +676,7 @@ const handleApprove = async () => {
                               ? "bg-green-100 text-green-800"
                               : reg.Status === "Rejected"
                               ? "bg-red-100 text-red-800"
-                              : "bg-yellow-100 text-yellow-800" 
+                              : "bg-yellow-100 text-yellow-800"
                           }`}
                         >
                           {reg.Status || "Pending"}

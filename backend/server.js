@@ -2031,6 +2031,330 @@ app.delete("/api/sessions/:session_id", async (req, res) => {
   }
 });
 
+//Payment details API and code
+app.get('/api/payments', authenticateToken, async (req, res) => {
+    const tenant_id = req.user?.tenant_id ?? req.user?.tenant ?? null;
+
+    if (!tenant_id) {
+        return res.status(401).json({ message: 'Authentication failed: Tenant ID missing.' });
+    }
+
+    const queryText = `
+        SELECT 
+            payment_id,
+            full_name,
+            email,
+            phone,
+            amount_paid,
+            hire_date,
+            end_date,
+            status
+        FROM cd.payment_details
+        WHERE tenant_id = $1 AND active = TRUE
+        ORDER BY payment_id DESC;
+    `;
+
+    try {
+        const result = await pool.query(queryText, [tenant_id]);
+        return res.status(200).json({
+            message: 'Payment records retrieved successfully.',
+            data: result.rows,
+        });
+
+    } catch (err) {
+        console.error('Database retrieval error (payments):', err.stack || err.message || err);
+        return res.status(500).json({ message: 'Error retrieving payment details.', error: err.message });
+    }
+});
+
+//payment insert the data 
+app.post('/api/payment', authenticateToken, async (req, res) => {
+  const tenant_id = req.user?.tenant_id ?? req.user?.tenant ?? null;    
+  console.log(`A user is inserting payment details for tenant ${tenant_id}.`);    
+  const { full_name, email, phone, amount_paid, hire_date, end_date } = req.body || {};
+  if (!full_name || !email || amount_paid == null || !hire_date || !end_date) {
+    return res.status(400).json({ message: 'Missing required payment fields.' });
+  }
+  const amount = Number(amount_paid);
+  if (Number.isNaN(amount) || amount < 0) {
+    return res.status(400).json({ message: 'Invalid amount_paid value.' });
+  }  
+  const hireDateStr = String(hire_date);
+  const endDateStr = String(end_date);
+
+  const queryText = `
+    INSERT INTO cd.payment_details (tenant_id, full_name, email, phone, amount_paid, hire_date, end_date)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *;
+  `;
+
+  const values = [tenant_id, full_name, email, phone, amount, hireDateStr, endDateStr];
+
+  try {
+    const result = await pool.query(queryText, values);
+    return res.status(201).json({
+      message: 'Payment details inserted successfully.',
+      requester: { tenant_id }, 
+      data: result.rows[0],
+    });
+  } catch (err) {
+    console.error('Database insertion error (payment):', err.stack || err.message || err);
+    return res.status(500).json({ message: 'Error inserting payment details.', error: err.message });
+  }
+});
+
+
+// Example: GET /api/payment_details?login_id=USER-12345
+app.get('/api/payment_details',authenticateToken, async (req, res) => {
+  // Get the login_id from the query parameters (e.g., ?login_id=...)
+  const loginId = req.query.login_id;
+
+  // Check if loginId was provided
+  if (!loginId) {
+    return res.status(400).json({ error: 'Missing required query parameter: login_id' });
+  }
+
+  // The SQL query with the parameter placeholder $1
+  const queryText = `
+    SELECT
+      tenant_id,
+      payment_id,
+      full_name,
+      email,
+      amount_paid,
+      end_date
+    FROM
+      cd.payment_details
+    WHERE
+      login_id = $1;
+  `;
+
+  try {
+    const result = await pool.query(queryText, [loginId]);
+    res.json(result.rows);
+
+  } catch (err) {
+    console.error('Error executing query', err.stack);
+    res.status(500).json({ error: 'Database query failed', details: err.message });
+  }
+});
+
+
+// The middleware runs BEFORE the route handler (async (req, res) => { ... })
+app.get('/api/payments-details', authenticateToken, async (req, res) => {
+    const tenant_id = req.user?.tenant_id ?? req.user?.tenant ?? null;
+
+    if (!tenant_id) {
+        return res.status(401).json({ message: 'Authentication failed: Tenant ID missing.' });
+    }
+
+    const queryText = `
+        SELECT
+          tenant_id,
+          payment_id,
+          full_name,
+          email,
+          amount_paid,
+          end_date
+        FROM cd.payment_details
+        WHERE tenant_id = $1 AND active = TRUE
+        ORDER BY payment_id DESC;
+    `;
+
+    try {
+        const result = await pool.query(queryText, [tenant_id]);
+        return res.status(200).json({
+            message: 'Payment records retrieved successfully.',
+            data: result.rows,
+        });
+
+    } catch (err) {
+        console.error('Database retrieval error (payments):', err.stack || err.message || err);
+        return res.status(500).json({ message: 'Error retrieving payment details.', error: err.message });
+    }
+});
+
+// Apply the authentication middleware to the route
+app.get('/api/payments/my-details', authenticateToken, async (req, res) => {
+    const tenantId = req.user.tenant_id;
+    const sqlQuery = `
+        SELECT
+            tenant_id,
+            payment_id,
+            full_name,
+            phone,
+            email,
+            amount_paid,
+            hire_date,
+            end_date,
+            status
+        FROM
+            cd.payment_details
+        WHERE
+            tenant_id = $1 AND active = TRUE
+        ORDER BY
+            payment_id DESC;
+    `;
+    
+    try {
+        const { rows } = await pool.query(sqlQuery, [tenantId]);
+        res.json({
+            message: `Payment details for tenant_id: ${tenantId}`,
+            data: rows
+        });
+    } catch (err) {
+        console.error('Database query error:', err);
+        res.status(500).json({ 
+            error: 'Failed to retrieve payment details.',
+            details: err.message
+        });
+    }
+});
+
+//delete the payment details API and code
+app.put('/api/payment/deactivate/:id', async (req, res) => {
+  const paymentId = req.params.id;
+  const queryText = `
+    UPDATE cd.payment_details
+    SET active = FALSE
+    WHERE payment_id = $1;
+  `;
+  const queryParams = [paymentId];
+  try {
+    const result = await pool.query(queryText, queryParams); 
+    if (result.rowCount > 0) {
+      res.status(200).json({
+        message: `Payment method with ID ${paymentId} has been successfully deactivated.`,
+        updatedRows: result.rowCount
+      });
+    } else {
+      res.status(404).json({
+        error: `Payment method with ID ${paymentId} not found.`
+      });
+    }
+  } catch (err) {
+    console.error('Error executing update query', err.stack);
+    res.status(500).json({
+      error: 'An internal server error occurred while deactivating the payment method.'
+    });
+  }
+});
+
+//edit the payment details
+app.get('/api/payment/:id', async (req, res) => {
+  const paymentId = req.params.id;
+  if (!paymentId || isNaN(paymentId)) {
+    return res.status(400).json({ error: 'Invalid or missing payment ID.' });
+  }
+  const queryText = `
+    SELECT 
+        payment_id,
+        full_name,
+        email,
+        phone,
+        amount_paid,
+        hire_date,
+        end_date,
+        status
+    FROM cd.payment_details
+    WHERE payment_id = $1 AND active = TRUE
+    ORDER BY payment_id DESC;
+  `;
+
+  try {
+    const result = await pool.query(queryText, [paymentId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: `Payment record with ID ${paymentId} not found or is inactive.` });
+    }
+    res.json(result.rows[0]);
+
+  } catch (error) {
+    console.error(`Database query error fetching payment ${paymentId}:`, error);
+    res.status(500).json({ error: 'Internal server error while fetching payment details.' });
+  }
+});
+
+// Update payment details API and code
+app.put('/api/payment/:id', async (req, res) => {
+    const paymentId = req.params.id;
+    const { full_name, email, phone, amount_paid, hire_date, end_date, status } = req.body;
+    const queryText = `
+        UPDATE cd.payment_details
+        SET full_name = $1,
+            email = $2,
+            phone = $3,
+            amount_paid = $4,
+            hire_date = $5,
+            end_date = $6,
+            status = $7
+        WHERE payment_id = $8
+        RETURNING *; -- RETURNING * sends the updated record back
+    `;
+
+    const queryParams = [
+        full_name,
+        email,
+        phone,
+        amount_paid,
+        hire_date, 
+        end_date,  
+        status,
+        paymentId  
+    ];
+
+    try {
+        // Use the established Postgres pool instance
+        const result = await pool.query(queryText, queryParams);
+        if (result.rowCount > 0) {
+            res.status(200).json(result.rows[0]);
+        } else {
+            res.status(404).json({
+                error: `Payment record with ID ${paymentId} not found.`
+            });
+        }
+    } catch (err) {
+        console.error('Error executing payment update query:', err.stack);
+        res.status(500).json({
+            error: 'An internal server error occurred while updating the payment record.'
+        });
+    }
+});
+
+
+// pending amount and paid amount API and code
+app.get('/api/payment-summary', authenticateToken, async (req, res) => {
+  const tenantId = req.tenantId;
+  const sqlQuery = `
+   SELECT
+    CAST(DATE_TRUNC('month', hire_date) AS DATE) AS payment_date,
+    SUM(CASE WHEN status IN ('paid', 'completed') THEN amount_paid ELSE 0 END) AS total_paid_amount,
+    SUM(CASE WHEN status IN ('pending', 'overdue') THEN amount_paid ELSE 0 END) AS total_pending_amount
+FROM
+    cd.payment_details  WHERE tenant_id = $1 AND active = TRUE
+GROUP BY
+    payment_date 
+ORDER BY
+    payment_date;
+  `;
+
+  try {
+    const result = await pool.query(sqlQuery, [tenantId]);
+    const summary = result.rows[0];
+
+    if (!summary) {
+        return res.status(404).json({ message: 'No payment summary found.' });
+    }
+    res.json({
+        tenant_id: tenantId,
+        total_paid_amount: parseFloat(summary.total_paid_amount) || 0,
+        total_pending_amount: parseFloat(summary.total_pending_amount) || 0,
+    });
+
+  } catch (err) {
+    console.error('Database query error:', err.stack);
+    res.status(500).send('Internal Server Error while fetching payment summary.');
+  }
+});
 // ---------------------------------------------
 // START SERVER
 // ---------------------------------------------

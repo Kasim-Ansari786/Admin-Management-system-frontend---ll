@@ -74,11 +74,10 @@ const StripePayment = () => {
 
     setIsLoading(true);
     
-    // Simulate payment processing delay
+ 
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
-      // Show success message (dummy payment)
       toast({
         title: "Payment Processed (Demo)",
         description: `Successfully processed payment of $${amount} for ${planId} plan.`,
