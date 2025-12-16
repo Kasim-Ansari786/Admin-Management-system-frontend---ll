@@ -25,7 +25,7 @@ useEffect(() => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-4 shadow-elegant animate-float">
             <span className="text-2xl font-bold text-primary-foreground">⚽</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Football Academy</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Admin Management System</h1>
           <p className="text-white/80">Management System</p>
         </div>
         

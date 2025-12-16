@@ -168,7 +168,7 @@ const SignupForm = ({ onSwitchToLogin }) => {
   return (
     <Card className="w-full max-w-md mx-auto shadow-card">
       <CardHeader className="space-y-4 text-center bg-gradient-primary rounded-t-xl text-primary-foreground">
-        <CardTitle className="text-2xl font-bold">Join Football Academy</CardTitle>
+        <CardTitle className="text-2xl font-bold">Admin Management System</CardTitle>
         <CardDescription className="text-primary-foreground/80">
           Create your account to get started
         </CardDescription>
