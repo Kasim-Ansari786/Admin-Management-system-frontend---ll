@@ -26,7 +26,7 @@ useEffect(() => {
             <span className="text-2xl font-bold text-primary-foreground">⚽</span>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Admin Management System</h1>
-          <p className="text-white/80">Management System</p>
+          <p className="text-white/80">Made in India with ❤️ by ComData Innovation</p>
         </div>
         
         {isLogin ? (
