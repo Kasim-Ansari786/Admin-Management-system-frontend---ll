@@ -12,6 +12,7 @@ import PendingRegistrationsComponent from "@/components/dashboards/PendingRegist
 import AssignST from "../../pages/AssignST";
 import Venues from "@/components/dashboards/Venues";
 import PaymentsIndex from "@/components/payments/PaymentsIndex";
+import SignupForm from "@/components/auth/SignupForm";
 
 import {
   MapPin,
@@ -37,6 +38,7 @@ import {
   Download,
   Upload,
 } from "lucide-react";
+//import { Bell, LogOut } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -553,10 +555,7 @@ const StaffDashboard = () => {
   const [coaches, setCoaches] = useState([{}]);
 
   const staffData = {
-    totalPlayers: 156,
-    activeCoaches: 8,
-    monthlyRevenue: 45600,
-    completionRate: 94,
+    // completionRate will be computed dynamically instead
   };
 
   // --- REGISTRATIONS STATE (FIXED) ---
@@ -572,6 +571,30 @@ const StaffDashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [players, setPlayers] = useState([]);
+
+  const completionRate = useMemo(() => {
+    if (!Array.isArray(players) || players.length === 0) return 0;
+    const completedCount = players.reduce((acc, p) => {
+      const s = (p?.status ?? "").toString().toLowerCase().trim();
+      if (!s) return acc;
+      if (
+        s.includes("active") ||
+        s.includes("paid") ||
+        s.includes("complete") ||
+        s.includes("completed") ||
+        s.includes("verified")
+      ) {
+        return acc + 1;
+      }
+      // fallback: check payment_status or similar fields
+      const paymentStatus = (p?.payment_status ?? p?.paymentStatus ?? "")
+        .toString()
+        .toLowerCase();
+      if (paymentStatus.includes("paid")) return acc + 1;
+      return acc;
+    }, 0);
+    return Math.round((completedCount / players.length) * 100);
+  }, [players]);
 
   // --- VENUES STATE (FIXED) ---
   const [venues, setVenues] = useState([]);
@@ -843,7 +866,8 @@ const StaffDashboard = () => {
     setRegistrationsError(null);
     try {
       const responseData = await GetregistrationsData();
-      const registrationArray = responseData.registrations || responseData.data || responseData || [];
+      const registrationArray =
+        responseData.registrations || responseData.data || responseData || [];
 
       if (Array.isArray(registrationArray)) {
         setAllRegistrations(registrationArray);
@@ -1021,7 +1045,6 @@ const StaffDashboard = () => {
     navigate("/auth");
   };
 
-  // --- Filtering and Pagination Logic (No Change) ---
 
   const filteredPlayers = useMemo(() => {
     let currentPlayers = players;
@@ -1063,6 +1086,7 @@ const StaffDashboard = () => {
     "settings",
     "Assigned",
     "venues",
+    "Administrator",
   ];
 
   const searchParams = new URLSearchParams(location.search);
@@ -1101,15 +1125,12 @@ const StaffDashboard = () => {
     }
   };
 
-  // --- CALCULATIONS AND DISPLAY LOGIC (FIXED) ---
 
-  // 1. Pending Registrations Count Logic
   const pendingRegistrationsCount = useMemo(() => {
     if (!Array.isArray(allRegistrations)) return 0;
 
     return allRegistrations.filter((reg) => {
       const status = reg?.status;
-      // Filter for statuses containing "pending" (case-insensitive)
       if (typeof status === "string") {
         return status.toLowerCase().includes("pending");
       }
@@ -1143,6 +1164,11 @@ const StaffDashboard = () => {
     activeVenuesCount
   );
 
+  const handleNotifications = () => {
+    // Your notifications logic here
+    console.log("Opening notifications...");
+  };
+
   return (
     <div className="space-y-6">
       <CoachFormDialog
@@ -1173,26 +1199,26 @@ const StaffDashboard = () => {
           </p>
         </div>
 
-        <Button
-          variant="secondary"
-          className="bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground"
-          onClick={handleSignOut}
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Sign Out
-        </Button>
+        <div className="flex items-center gap-3">         
+          <Button
+            variant="secondary"
+            className="bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground"
+            onClick={handleSignOut}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign Out
+          </Button>
+        </div>
       </div>
 
       {/* Data Cards Grid (FIXED) */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {/* Pending Registrations Card - FIXED */}
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-yellow-500" />
               <div>
                 <p className="text-2xl font-bold">
-                  {/* USE THE FIXED DISPLAY LOGIC */}
                   {pendingCountDisplay}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -1222,37 +1248,18 @@ const StaffDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Monthly Revenue Card */}
-        {/* <Card className="shadow-card">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <IndianRupee className="h-5 w-5 text-success" />
-              <div>
-                <p className="text-2xl font-bold">
-                  ₹{Number(staffData.monthlyRevenue ?? 0).toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">Monthly Revenue</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card> */}
-
-        {/* Completion Rate Card */}
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-success" />
               <div>
-                <p className="text-2xl font-bold">
-                  {staffData.completionRate}%
-                </p>
+                <p className="text-2xl font-bold">{completionRate}%</p>
                 <p className="text-xs text-muted-foreground">Completion Rate</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Active Coaches Card */}
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -1274,7 +1281,7 @@ const StaffDashboard = () => {
               <MapPin className="h-5 w-5 text-blue-600" />
               <div>
                 <p className="text-2xl font-bold">
-                  {venuesCountDisplay} {/* FIXED TO USE DYNAMIC COUNT */}
+                  {venuesCountDisplay} 
                 </p>
                 <p className="text-xs text-muted-foreground">Active Venues</p>
               </div>
@@ -1285,11 +1292,10 @@ const StaffDashboard = () => {
 
       <Tabs
         value={activeTab}
-        // Use the new handleTabChange function
         onValueChange={handleTabChange}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="registrations">Registrations</TabsTrigger>
           <TabsTrigger value="players">Player Management</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
@@ -1297,26 +1303,26 @@ const StaffDashboard = () => {
           <TabsTrigger value="settings">Academy Settings</TabsTrigger>
           <TabsTrigger value="Assigned">Assign Players</TabsTrigger>
           <TabsTrigger value="venues">Venue Management</TabsTrigger>
+          <TabsTrigger value="Administrator">Admin Access</TabsTrigger>
         </TabsList>
 
-        {/* Tab Content Sections (Your original content) */}
-        {/* Venues Content */}
         <TabsContent value="venues">
           <Venues />
         </TabsContent>
 
-        {/* Registrations Content */}
+        <TabsContent value="Administrator" className="mt-4">
+          <SignupForm />
+        </TabsContent>
+
         <TabsContent value="registrations">
-          {/* Using the component you imported */}
           <PendingRegistrationsComponent />
         </TabsContent>
 
-        {/* Assigned Content */}
+       
         <TabsContent value="Assigned">
           <AssignST />
         </TabsContent>
 
-        {/* Players Content (Simplified for brevity, assuming your data/logic is correct) */}
         <TabsContent value="players" className="space-y-4">
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
@@ -1456,12 +1462,10 @@ const StaffDashboard = () => {
           </Card>
         </TabsContent>
 
-        {/* Payments Content (Simplified) */}
-         <TabsContent value="payments">
-        <PaymentsIndex/>
-        </TabsContent>
-
-        {/* Coaches Content (Simplified) */}
+        <TabsContent value="payments">
+          <PaymentsIndex />
+        </TabsContent>        
+        
         <TabsContent value="coaches" className="space-y-4">
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1558,7 +1562,6 @@ const StaffDashboard = () => {
           </Card>
         </TabsContent>
 
-        {/* Settings Content */}
         <TabsContent value="settings" className="space-y-4">
           <AcademySettingsTab />
         </TabsContent>
