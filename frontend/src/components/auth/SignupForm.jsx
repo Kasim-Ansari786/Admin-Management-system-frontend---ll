@@ -17,7 +17,7 @@ const passwordRules = {
   hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/,
 };
 
-const SignupForm = ({ onSwitchToLogin }) => {
+const Signup = ({ onSwitchToLogin }) => {
   // ⚠️ CRITICAL CHANGE: Removed tenantId state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -166,17 +166,16 @@ const SignupForm = ({ onSwitchToLogin }) => {
 
   // --- Component Render ---
   return (
-    <Card className="w-full max-w-md mx-auto shadow-card">
-      <CardHeader className="space-y-4 text-center bg-gradient-primary rounded-t-xl text-primary-foreground">
-        <CardTitle className="text-2xl font-bold">Admin Management System</CardTitle>
+    <Card className="space-y-4">
+      {/* <CardHeader className="space-y-4 text-center bg-gradient-primary rounded-t-xl text-primary-foreground">
+        <CardTitle className="text-xlbold">Admin Management System</CardTitle>
         <CardDescription className="text-primary-foreground/80">
           Create your account to get started
         </CardDescription>
-      </CardHeader>
+      </CardHeader> */}
       <CardContent className="p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          
-          {/* Full Name Input */}
+
           <div className="space-y-2">
             <Label htmlFor="name">Full Name</Label>
             <Input
@@ -190,7 +189,6 @@ const SignupForm = ({ onSwitchToLogin }) => {
             />
           </div>
 
-          {/* Email Input */}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -204,7 +202,6 @@ const SignupForm = ({ onSwitchToLogin }) => {
             />
           </div>
 
-          {/* Account Type Select */}
           <div className="space-y-2">
             <Label htmlFor="role">Account Type</Label>
             <Select value={role} onValueChange={(value) => setRole(value)}>
@@ -227,7 +224,7 @@ const SignupForm = ({ onSwitchToLogin }) => {
                 <SelectItem value="staff">
                   <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4" />
-                    <span>Staff</span>
+                    <span>Admin</span>
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -237,7 +234,6 @@ const SignupForm = ({ onSwitchToLogin }) => {
             </p>
           </div>
 
-          {/* Password Input */}
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <div className="relative">
@@ -261,11 +257,9 @@ const SignupForm = ({ onSwitchToLogin }) => {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
             </div>
-            {/* Display Strength Indicator */}
             {password.length > 0 && <PasswordStrengthIndicator />}
           </div>
 
-          {/* Confirm Password Input */}
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm Password</Label>
             <div className="relative">
@@ -289,15 +283,13 @@ const SignupForm = ({ onSwitchToLogin }) => {
                 {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
             </div>
-            {/* Display Match Error */}
             {confirmPassword.length > 0 && !passwordsMatch && (
               <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                 <XCircle className="h-3 w-3" /> Passwords do not match.
               </p>
             )}
           </div>
-
-          {/* Submit Button */}
+        
           <Button
             type="submit"
             className="w-full bg-gradient-primary hover:bg-primary-dark transition-smooth"
@@ -308,7 +300,7 @@ const SignupForm = ({ onSwitchToLogin }) => {
         </form>
 
         {/* Switch to Login Link */}
-        <div className="mt-6 text-center">
+        {/* <div className="mt-6 text-center">
           <p className="text-sm text-muted-foreground">
             Already have an account?{' '}
             <Button
@@ -319,10 +311,10 @@ const SignupForm = ({ onSwitchToLogin }) => {
               Sign in here
             </Button>
           </p>
-        </div>
+        </div> */}
       </CardContent>
     </Card>
   );
 };
 
-export default SignupForm;
+export default Signup;
