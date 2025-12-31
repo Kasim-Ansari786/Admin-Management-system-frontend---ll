@@ -194,7 +194,7 @@ export default function AddPaymentRecordDialog({ open, onOpenChange, onAddRecord
                 disabled={isSubmitting}
               />
               <p className="text-sm text-muted-foreground mt-1">
-                Calculated End Date: **{calculatedEndDate || 'Select a Start Date'}**
+                Calculated End Date: {calculatedEndDate || 'Select a Start Date'}
               </p>
               <p className="text-xs text-muted-foreground">
                 End date is automatically set to 1 month after the start date.
