@@ -558,20 +558,25 @@ export const GetagssignDetails = async () => {
   }
 };
 
-export async function AssignCoachupdated(coach_name, coach_code, player_id, id) {
+export async function AssignCoachupdated(coach_name, coach_id, player_id, id) {
   try {
-    // Use centralized axios instance so headers, timeouts and interceptors are consistent
     const resp = await api.post(
       "/api/update-coach",
-      { coach_name, coach_code, player_id, id },
+      { 
+        coach_name, 
+        coach_id, 
+        player_id, 
+        id 
+      },
       { headers: { "Content-Type": "application/json" } }
     );
 
     return resp.data;
   } catch (error) {
-    console.error("AssignCoachupdated error:", error?.response?.data ?? error.message ?? error);
-    // Normalize thrown error so callers can inspect message and status
-    const err = new Error(error?.response?.data?.error || error?.message || "Failed to assign coach");
+    const errorMsg = error?.response?.data?.details || error?.response?.data?.error || "Failed to assign coach";
+    console.error("AssignCoachupdated error:", errorMsg);
+    
+    const err = new Error(errorMsg);
     err.status = error?.response?.status;
     throw err;
   }

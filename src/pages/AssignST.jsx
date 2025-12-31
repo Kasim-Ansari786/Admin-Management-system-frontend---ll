@@ -435,16 +435,12 @@ export default function StaffDashboard() {
       return;
     }
 
-    // Resolve the coach identifier from either the numeric `selectedCoach` or the Select string `selectedCoachId`.
+    
     const coachIdRaw = selectedCoach !== null && selectedCoach !== undefined ? selectedCoach : selectedCoachId;
-
-    // Find coach robustly by matching numeric or string forms (handles 'CO33' style ids or numeric ids)
     const coachToAssign = coaches.find((c) => {
       if (!c) return false;
-      const coachIdStr = c.coach_id !== undefined && c.coach_id !== null ? String(c.coach_id) : "";
-      // direct string match
+      const coachIdStr = c.coach_id !== undefined && c.coach_id !== null ? String(c.coach_id) : "";     
       if (String(coachIdRaw) === coachIdStr) return true;
-      // numeric match when possible
       const rawNum = Number(coachIdRaw);
       const cNum = Number(c.coach_id);
       if (!isNaN(rawNum) && !isNaN(cNum) && rawNum === cNum) return true;
@@ -476,9 +472,7 @@ export default function StaffDashboard() {
       }
 
       try {
-        // Use the resolved coach id value to send to the API. Prefer coachToAssign.coach_id (as stored in DB).
         const coachIdToSend = coachToAssign.coach_id;
-
         await AssignCoachupdated(
           coachToAssign.coach_name,
           coachIdToSend,
@@ -534,9 +528,9 @@ export default function StaffDashboard() {
       <Tabs defaultValue="Assigned" className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Assign Coach to Player</CardTitle>
+            <CardTitle>Assign teacher to Player</CardTitle>
             <CardDescription>
-              Select a coach and one or more players to make an assignment.
+              Select a coach and one or more Student to make an assignment.
             </CardDescription>
           </CardHeader>
 
@@ -544,16 +538,13 @@ export default function StaffDashboard() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-foreground">
-                  Select Coach
+                  Select Teacher
                 </Label>
 
                 <Select
                   value={selectedCoachId}
                   onValueChange={(value) => {
-                    // Keep the raw string id for the Select control
                     setSelectedCoachId(value);
-                    // Also set numeric selectedCoach used by assignment logic
-                    // If the value isn't a valid number (e.g., 'CO33'), keep selectedCoach as null
                     const numeric = value === "" ? null : Number(value);
                     setSelectedCoach(Number.isNaN(numeric) ? null : numeric);
                     console.log("Selected coach id:", value);
@@ -575,7 +566,7 @@ export default function StaffDashboard() {
                       ))
                     ) : (
                       <SelectItem value="no-coaches" disabled>
-                        No coaches found
+                        No teachers found
                       </SelectItem>
                     )}
                   </SelectContent>
@@ -583,7 +574,7 @@ export default function StaffDashboard() {
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-foreground">
-                  Select Player(s)
+                  Select Student(s)
                 </Label>
 
                 <Popover
@@ -684,24 +675,24 @@ export default function StaffDashboard() {
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               <UserPlus className="mr-2 h-4 w-4" />
-              Assign Player
+              Assign Student
             </Button>
 
             <div className="flex justify-between text-sm pt-4 border-t">
               <p>
-                Unassigned Players:{" "}
+                Unassigned Student:{" "}
                 <span className="font-bold text-red-500">
                   {unassignedPlayers.length}
                 </span>
               </p>
               <p>
-                Assigned Players:{" "}
+                Assigned Student:{" "}
                 <span className="font-bold text-green-600">
                   {assignedPlayers.length}
                 </span>
               </p>
               <p>
-                Total Players:{" "}
+                Total Students:{" "}
                 <span className="font-bold">{players.length}</span>
               </p>
             </div>
@@ -710,9 +701,9 @@ export default function StaffDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>All Player Details</CardTitle>
+            <CardTitle>All Student Details</CardTitle>
             <CardDescription>
-              A complete list of all players and their current coach
+              A complete list of all Students and their current teacher
               assignments.
             </CardDescription>
           </CardHeader>
@@ -721,7 +712,7 @@ export default function StaffDashboard() {
               {players.length === 0 ? (
                 <div className="text-center p-6 opacity-70 border rounded">
                   <Users className="mx-auto mb-2 h-6 w-6" />
-                  No player data loaded. Please check API connection.
+                  No Student data loaded. Please check API connection.
                 </div>
               ) : (
                 players.map((player) => {
@@ -755,7 +746,7 @@ export default function StaffDashboard() {
                             {player.name}
                           </p>
                           <p className="text-sm opacity-70">
-                            Player ID: {player.player_id || "N/A"} | Category:{" "}
+                            Student ID: {player.player_id || "N/A"} | Category:{" "}
                             {player.category || "N/A"}
                           </p>
                         </div>
@@ -767,7 +758,7 @@ export default function StaffDashboard() {
                               Assigned
                             </Badge>
                             <p className="text-sm font-medium mt-1">
-                              Coach: {coachName}
+                              Teacher: {coachName}
                             </p>
                           </>
                         ) : (

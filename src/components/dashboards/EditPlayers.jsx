@@ -204,7 +204,7 @@ export default function PlayerEditor() {
         {/* Text Content Section */}
         <div className="flex-grow">
           <h1 className="text-2xl font-bold header-text-shadow text-white leading-tight">
-            Edit Players Administration
+            Edit Students Administration
           </h1>
           <p className="text-white/80 text-sm mt-0.5">
             Complete academy management and oversight
@@ -214,7 +214,7 @@ export default function PlayerEditor() {
 
       <Card className="p-4 shadow-xl rounded-2xl">
         <CardContent className="space-y-6">
-          <h1 className="text-2xl font-bold text-center">Player Manager</h1>
+          <h1 className="text-2xl font-bold text-center">Student Manager</h1>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <div>

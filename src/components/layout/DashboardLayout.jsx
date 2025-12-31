@@ -11,7 +11,7 @@ const DashboardLayout = ({ children }) => {
       <header className="gradient-header w-full flex items-center gap-6 p-6 shadow-lg shadow-glow animate-fade-in rounded-xl">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">⚽</span>
+            <span className="text-2xl">📚</span>
             <h1 className="text-primary-foreground font-extrabold text-2xl">
               Admin Management System
             </h1>

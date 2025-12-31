@@ -50,7 +50,7 @@ export const LineChartCard = () => {
   }
 
   return (
-    <Card className="chart-container overflow-hidden border-none shadow-2xl bg-slate-50/50">
+ <Card className="chart-container overflow-hidden border-none shadow-2xl bg-slate-50/50 w-full max-w-4xl mx-auto">
       <CardHeader className="pb-2 pt-6 px-6">
         <CardTitle className="text-xl font-bold text-slate-800">Performance Trends</CardTitle>
         <CardDescription>Weekly revenue for the current month</CardDescription>
@@ -102,7 +102,7 @@ export const LineChartCard = () => {
                   }}
                 />
                 
-                <Legend wrapperStyle={{ paddingTop: '30px' }} />
+                <Legend verticalAlign="top" height={36} iconType="circle" />
 
                 <Line
                   yAxisId="left"
@@ -115,8 +115,7 @@ export const LineChartCard = () => {
                   animationDuration={1500}
                 />
 
-                {/* Keep Attendance Line for UI, though data is currently mocked as 0 */}
-                <Line
+                {/* <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="attendance"
@@ -125,7 +124,7 @@ export const LineChartCard = () => {
                   dot={{ r: 4, fill: "white", strokeWidth: 2, stroke: "#10b981" }}
                   activeDot={{ r: 8, strokeWidth: 0 }}
                   animationDuration={1500}
-                />
+                /> */}
               </LineChart>
             </ResponsiveContainer>
           </div>

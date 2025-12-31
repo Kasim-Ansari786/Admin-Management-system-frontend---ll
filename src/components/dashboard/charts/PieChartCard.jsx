@@ -21,7 +21,7 @@ export const PieChartCard = () => {
   return (
    <Card className="chart-container overflow-hidden border-none shadow-xl bg-slate-50">
       <CardHeader className="items-center pb-0 pt-6">
-        <CardTitle className="text-xl font-bold text-slate-800">Player Status</CardTitle>
+        <CardTitle className="text-xl font-bold text-slate-800">Student Status</CardTitle>
         <CardDescription>Current distribution of player accounts</CardDescription>
       </CardHeader>
 

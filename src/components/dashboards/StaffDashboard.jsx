@@ -1235,7 +1235,7 @@ const StaffDashboard = () => {
                   )}
                 </p>
                 <p className="text-[10px] uppercase font-semibold text-muted-foreground">
-                  Players
+                  Student
                 </p>
               </div>
             </div>
@@ -1273,7 +1273,7 @@ const StaffDashboard = () => {
                   {coaches.filter((c) => c.status === "Active").length}
                 </p>
                 <p className="text-[10px] uppercase font-semibold text-muted-foreground">
-                  Coaches
+                  Teacher
                 </p>
               </div>
             </div>
@@ -1292,7 +1292,7 @@ const StaffDashboard = () => {
                   {venuesCountDisplay}
                 </p>
                 <p className="text-[10px] uppercase font-semibold text-muted-foreground">
-                  Venues
+                  Center
                 </p>
               </div>
             </div>
@@ -1319,22 +1319,22 @@ const StaffDashboard = () => {
             Registrations
           </TabsTrigger>
           <TabsTrigger value="players" className="3d-tab">
-            Player Management
+            Student Management
           </TabsTrigger>
           <TabsTrigger value="payments" className="3d-tab">
             Payments
           </TabsTrigger>
           <TabsTrigger value="coaches" className="3d-tab">
-            Coach Management
+            Teacher Management
           </TabsTrigger>
           <TabsTrigger value="settings" className="3d-tab">
             Academy Settings
           </TabsTrigger>
           <TabsTrigger value="Assigned" className="3d-tab">
-            Assign Players
+            Assign Student
           </TabsTrigger>
           <TabsTrigger value="venues" className="3d-tab">
-            Venue Management
+            Center Management
           </TabsTrigger>
           <TabsTrigger value="Administrator" className="3d-tab">
             Admin Access
@@ -1367,10 +1367,10 @@ const StaffDashboard = () => {
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
-                  Player Management
+                  Student Management
                 </CardTitle>
                 <CardDescription>
-                  Manage all registered players and their details
+                  Manage all registered students and their details
                 </CardDescription>
               </div>
               <div className="flex flex-col sm:flex-row items-end gap-3 w-full max-w-lg ml-auto">
@@ -1402,7 +1402,7 @@ const StaffDashboard = () => {
                   className="w-full sm:w-auto flex-shrink-0"
                 >
                   <UserPlus className="h-4 w-4 mr-2" />
-                  Add New Player
+                  Add New Student
                 </Button>
               </div>
             </CardHeader>
@@ -1411,7 +1411,7 @@ const StaffDashboard = () => {
                 {isLoading ? (
                   <div className="flex justify-center items-center p-8 text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                    Fetching player data...
+                    Fetching student data...
                   </div>
                 ) : currentPlayers.length === 0 ? (
                   <div className="flex flex-col justify-center items-center p-8 text-muted-foreground">
@@ -1422,7 +1422,7 @@ const StaffDashboard = () => {
                         : "No Player Records Found"}
                     </p>
                     <p className="text-sm">
-                      Click "Add New Player" or check your server connection.
+                      Click "Add New student" or check your server connection.
                     </p>
                     {error && (
                       <p className="text-xs text-red-500 mt-2">
@@ -1456,9 +1456,9 @@ const StaffDashboard = () => {
                           <p className="text-xs text-muted-foreground max-w-md">
                             Address: {player.address} • Phone: {player.phone_no}
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          {/* <p className="text-xs text-muted-foreground">
                             Coach: {player.coach_name}
-                          </p>
+                          </p> */}
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
@@ -1510,7 +1510,7 @@ const StaffDashboard = () => {
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
-                  Coach Management
+                  Teacher Management
                 </CardTitle>
                 <CardDescription>
                   Manage coaching staff and their assignments
@@ -1518,7 +1518,7 @@ const StaffDashboard = () => {
               </div>
               <Button size="sm" onClick={openAddCoachModal}>
                 <UserPlus className="h-4 w-4 mr-2" />
-                Add New Coach
+                Add New Teacher
               </Button>
             </CardHeader>
 

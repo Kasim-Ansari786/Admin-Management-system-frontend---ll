@@ -212,7 +212,7 @@ useEffect(() => {
               <div>
                 <p className="text-xs text-muted-foreground">Name</p>
                 <p className="font-medium"> {childData?.name}</p>
-                <p className="font-medium"> Player ID: {childData?.player_id}</p>
+                <p className="font-medium"> Student ID: {childData?.player_id}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -266,9 +266,9 @@ useEffect(() => {
                 </Badge>
               </div>
               <Progress value={attendance} className="h-2" />
-              <p className="text-sm text-muted-foreground">
+              {/* <p className="text-sm text-muted-foreground">
                 Coach: {childData?.coach}
-              </p>
+              </p> */}
             </div>
           </CardContent>
         </Card>

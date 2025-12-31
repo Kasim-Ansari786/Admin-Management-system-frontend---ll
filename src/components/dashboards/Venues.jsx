@@ -545,7 +545,7 @@ export default function StaffDashboard() {
           <Card>
             <CardHeader className="flex flex-row justify-between items-start">
               <div>
-                <CardTitle>Venue Management</CardTitle>
+                <CardTitle>Center Management</CardTitle>
 
                 <CardDescription>
                   Manage academy centers and their time slots.

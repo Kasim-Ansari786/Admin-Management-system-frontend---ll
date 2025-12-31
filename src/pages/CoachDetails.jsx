@@ -634,12 +634,12 @@ const CoachDetails = () => {
         <div className="flex-grow">
           <div>
             <h1 className="text-primary-foreground font-bold mb-2">
-              {coachData.coach_name} Coach Dashboard
+              {coachData.coach_name} Teacher Dashboard
             </h1>
           </div>
 
           <p className="text-primary-foreground/80">
-            Manage training sessions and track player attendance
+            Manage training sessions and track Student attendance
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -654,7 +654,7 @@ const CoachDetails = () => {
       &nbsp;&nbsp;&nbsp;
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Coach Information</CardTitle>
+          <CardTitle>Teacher Information</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
@@ -700,7 +700,7 @@ const CoachDetails = () => {
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="players" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Assigned Players ({assignedPlayers.length})
+            Assigned Students ({assignedPlayers.length})
           </TabsTrigger>
           <TabsTrigger value="schedule" className="flex items-center gap-2">
             <CalendarIcon className="h-4 w-4" />
@@ -714,10 +714,10 @@ const CoachDetails = () => {
               <Card className="glass-card animate-fade-up">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold font-display">
-                    Players by Category
+                    Students by Category
                   </CardTitle>
                   <CardDescription>
-                    Distribution of {assignedPlayers.length} players across
+                    Distribution of {assignedPlayers.length} Student across
                     training groups
                   </CardDescription>
                 </CardHeader>
@@ -774,7 +774,7 @@ const CoachDetails = () => {
                     Attendance Distribution
                   </CardTitle>
                   <CardDescription>
-                    Player attendance performance breakdown
+                    Student attendance performance breakdown
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -833,16 +833,16 @@ const CoachDetails = () => {
             </div>
             <Card className="xl:col-span-2">
               <CardHeader>
-                <CardTitle>Assigned Players</CardTitle>
+                <CardTitle>Assigned Student</CardTitle>
                 <CardDescription>
-                  List of all players currently assigned to{" "}
+                  List of all Student currently assigned to{" "}
                   {coachData.coach_name || "this coach"}.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {assignedPlayers.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No players are currently assigned to this coach.
+                    No student are currently assigned to this Teacher.
                   </div>
                 ) : (
                   <div className="space-y-4">

@@ -356,7 +356,7 @@ const CoachDashboard = () => {
     <div className="space-y-6">
       <div className="gradient-header w-full flex items-center gap-6 p-6 shadow-lg shadow-glow animate-fade-in rounded-xl">
         <div className="flex-grow">
-          <h1 className="text-primary-foreground/80">Coach Dashboard</h1>
+          <h1 className="text-primary-foreground/80">Teacher Dashboard</h1>
           <p className="text-primary-foreground/80">
             Welcome back,{" "}
             <span className="font-semibold">{user?.name || "Coach"}</span>
@@ -369,15 +369,6 @@ const CoachDashboard = () => {
             <p>Role: {user?.role || "—"}</p>
           </div>
         </div>
-
-        {/* <Button
-          variant="secondary"
-          className="ml-7 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground"
-          onClick={handleSignOut}
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Sign Out
-        </Button> */}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -394,7 +385,7 @@ const CoachDashboard = () => {
                   {isLoadingPlayers ? "..." : assignedPlayers.length}
                 </p>
                 <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                  Assigned Players
+                  Assigned student
                 </p>
               </div>
             </div>
@@ -467,7 +458,7 @@ const CoachDashboard = () => {
 
       <Tabs defaultValue="players" className="space-y-4">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="players">Assigned Players</TabsTrigger>
+          <TabsTrigger value="players">Assigned student</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="records">Records</TabsTrigger>
@@ -478,10 +469,10 @@ const CoachDashboard = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Assigned Players
+                Assigned student
               </CardTitle>
               <CardDescription>
-                Manage your assigned players and track their progress
+                Manage your assigned student and track their progress
               </CardDescription>
             </CardHeader>
             <CardContent>

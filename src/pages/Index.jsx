@@ -78,16 +78,16 @@ const StaffDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mt-6">
           <div className="p-6 border border-gray-200 rounded-xl shadow-sm bg-white">
             <StatCard
-              title="Total Players"
+              title="Total Student"
               value={data.total_players || 0}
-              subtitle="Active Players"
+              subtitle="Active Student"
               icon={Users}
               trend={data.playersTrend}
             />
           </div>
           <div className="p-6 border border-gray-200 rounded-xl shadow-sm bg-white">
             <StatCard
-              title="Active Coaches"
+              title="Active Teacher"
               value={data.total_coaches || 0}
               subtitle="Across all venues"
               icon={UserPlus}
@@ -95,7 +95,7 @@ const StaffDashboard = () => {
           </div>
           <div className="p-6 border border-gray-200 rounded-xl shadow-sm bg-white">
             <StatCard
-              title="Venues"
+              title="Center"
               value={data.total_venues || 0}
               subtitle="Training locations"
               icon={MapPin}
@@ -214,7 +214,7 @@ const StaffDashboard = () => {
           </Card>
           <Card className="p-4">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium">Coach Utilization</span>
+              <span className="text-sm font-medium">Teacher Utilization</span>
               <span className="text-sm text-muted-foreground">
                 {data.coachUtilization || 0}%
               </span>
@@ -223,7 +223,7 @@ const StaffDashboard = () => {
           </Card>
           <Card className="p-4">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium">Venue Occupancy</span>
+              <span className="text-sm font-medium">Center Occupancy</span>
               <span className="text-sm text-muted-foreground">
                 {data.venueOccupancy || 0}%
               </span>
