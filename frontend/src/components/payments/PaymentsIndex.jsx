@@ -148,7 +148,10 @@ export default function Index() {
       }, 0);
 
       const overallTotal = totalCollected + totalPending;
-      const collectionRate = overallTotal > 0 ? ((totalCollected / overallTotal) * 100).toFixed(1) : "0.0";
+      const collectionRate =
+        overallTotal > 0
+          ? ((totalCollected / overallTotal) * 100).toFixed(1)
+          : "0.0";
 
       // Build a simple overview array for the UI to map over
       const overviewArray = [
@@ -189,15 +192,20 @@ export default function Index() {
     setError(null);
     try {
       const data = await getPayments();
+
       const mappedRecords = Array.isArray(data)
         ? data.map((record) => ({
             id: record.payment_id,
             name: record.full_name,
             email: record.email,
             phone: record.phone,
-            joinDate: record.hire_date, // Mapped to hire_date
-            startDate: record.start_date || record.hire_date, // Use start_date if available
+            joinDate: record.hire_date,
+            startDate: record.start_date || record.hire_date,
             paymentAmount: parseFloat(record.amount_paid) || 0,
+
+            // ADDED: Mapping the new column from backend
+            payment_method: record.payment_method || "N/A",
+
             endDate: record.end_date,
             status: record.status,
           }))
@@ -229,7 +237,7 @@ export default function Index() {
   };
 
   const handleUpdateRecord = (updated) => {
-    const mapped = {      
+    const mapped = {
       id: updated.id || updated.payment_id,
       name: updated.name || updated.full_name,
       email: updated.email,
@@ -241,7 +249,7 @@ export default function Index() {
       status: updated.status,
     };
 
-    setRecords((prev) => prev.map((r) => (r.id === mapped.id ? mapped : r)));    
+    setRecords((prev) => prev.map((r) => (r.id === mapped.id ? mapped : r)));
     fetchPaymentData();
   };
 
@@ -277,7 +285,6 @@ export default function Index() {
       });
     }
   };
-
 
   const handleAddRecord = (newRecord) => {
     const mapped = {
@@ -417,9 +424,11 @@ export default function Index() {
                       overviewData.map((payment, index) => (
                         <div key={index} className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span className="font-medium">{payment.payment_date}</span>
-                            <span className="font-semibold">₹
-                              {payment.total.toLocaleString("en-IN")}
+                            <span className="font-medium">
+                              {payment.payment_date}
+                            </span>
+                            <span className="font-semibold">
+                              ₹{payment.total.toLocaleString("en-IN")}
                             </span>
                           </div>
                           <Progress
@@ -509,6 +518,9 @@ export default function Index() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">
+                        <TableHead className="font-semibold w-[60px]">
+                          Sr/No
+                        </TableHead>
                         <TableHead className="font-semibold min-w-[120px]">
                           Name
                         </TableHead>
@@ -523,6 +535,9 @@ export default function Index() {
                         </TableHead>
                         <TableHead className="font-semibold min-w-[120px]">
                           Amount
+                        </TableHead>
+                        <TableHead className="font-semibold min-w-[130px]">
+                          Method
                         </TableHead>
                         <TableHead className="font-semibold min-w-[100px]">
                           Start Date
@@ -542,7 +557,7 @@ export default function Index() {
                       {isLoading ? (
                         <TableRow>
                           <TableCell
-                            colSpan={9}
+                            colSpan={11}
                             className="text-center py-8 text-primary"
                           >
                             <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
@@ -552,7 +567,7 @@ export default function Index() {
                       ) : records.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={9}
+                            colSpan={11}
                             className="text-center py-8 text-muted-foreground"
                           >
                             No payment records found. Click "Add New Record" to
@@ -560,17 +575,46 @@ export default function Index() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        records.map((record) => {
+                        records.map((record, index) => {
                           const overdue = isPaymentOverdue(record.endDate);
+
+                          // Dynamic styling for Payment Method
+                          const getMethodStyle = (method) => {
+                            const m = method?.toLowerCase();
+                            if (m === "razorpay")
+                              return "bg-indigo-100 text-indigo-700 border-indigo-200";
+                            if (m === "cash")
+                              return "bg-emerald-100 text-emerald-700 border-emerald-200";
+                            if (m === "upi")
+                              return "bg-orange-100 text-orange-700 border-orange-200";
+                            return "bg-slate-100 text-slate-700 border-slate-200";
+                          };
+
+                          // Dynamic styling for Status
+                          const getStatusStyle = (status) => {
+                            const s = status?.toLowerCase();
+                            if (s === "paid" || s === "completed")
+                              return "bg-green-100 text-green-700 border-green-200";
+                            if (s === "active")
+                              return "bg-blue-100 text-blue-700 border-blue-200";
+                            if (s === "overdue" || overdue)
+                              return "bg-red-100 text-red-700 border-red-200";
+                            return "bg-gray-100 text-gray-700 border-gray-200";
+                          };
+
                           return (
                             <TableRow
                               key={record.id}
                               className={
-                                overdue && record.status !== "paid" 
+                                overdue && record.status !== "paid"
                                   ? "bg-destructive/5 hover:bg-destructive/10"
                                   : "hover:bg-muted/50"
                               }
                             >
+                              <TableCell className="text-muted-foreground font-medium">
+                                {index + 1}
+                              </TableCell>
+
                               <TableCell className="font-medium">
                                 {record.name}
                               </TableCell>
@@ -581,30 +625,54 @@ export default function Index() {
                               <TableCell>
                                 {formatDate(record.joinDate)}
                               </TableCell>
-                              <TableCell className="font-semibold">
-                               ₹
-                                {record.paymentAmount.toLocaleString("en-IN")}
+                              <TableCell className="font-semibold text-primary">
+                                ₹ {record.paymentAmount.toLocaleString("en-IN")}
                               </TableCell>
+
+                              {/* Colorized Method Badge */}
+                              <TableCell>
+                                <span
+                                  className={`capitalize px-2.5 py-0.5 rounded-full border text-[11px] font-bold ${getMethodStyle(
+                                    record.payment_method
+                                  )}`}
+                                >
+                                  {record.payment_method || "N/A"}
+                                </span>
+                              </TableCell>
+
                               <TableCell>
                                 {formatDate(record.startDate)}
                               </TableCell>
                               <TableCell
                                 className={
                                   overdue && record.status !== "paid"
-                                    ? "text-destructive font-semibold"
+                                    ? "text-destructive font-bold"
                                     : ""
                                 }
                               >
                                 {formatDate(record.endDate)}
                               </TableCell>
-                              <TableCell>{getStatusBadge(record)}</TableCell>
+
+                              {/* Colorized Status Badge */}
+                              <TableCell>
+                                <span
+                                  className={`capitalize px-2.5 py-0.5 rounded-full border text-[11px] font-bold ${getStatusStyle(
+                                    record.status
+                                  )}`}
+                                >
+                                  {overdue && record.status !== "paid"
+                                    ? "Overdue"
+                                    : record.status}
+                                </span>
+                              </TableCell>
+
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleEdit(record)}
-                                    className="text-primary hover:text-primary"
+                                    className="h-8 w-8 p-0 text-primary hover:bg-primary/10"
                                   >
                                     <Pencil className="h-4 w-4" />
                                   </Button>
@@ -612,9 +680,9 @@ export default function Index() {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => handleSendReminder(record)}
-                                    className="flex items-center gap-1"
+                                    className="h-8 px-2 text-xs flex items-center gap-1 border-primary/20 hover:bg-primary/5"
                                   >
-                                    <Phone className="h-3 w-3" />
+                                    <Phone className="h-3.5 w-3.5" />
                                     Remind
                                   </Button>
                                   <AlertDialog>
@@ -622,7 +690,7 @@ export default function Index() {
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="text-destructive hover:text-destructive"
+                                        className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
                                       >
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
