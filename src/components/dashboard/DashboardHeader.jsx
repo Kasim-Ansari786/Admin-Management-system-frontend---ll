@@ -1,5 +1,5 @@
 import React from "react";
-import { Moon, Sun, Bell, LogOut, User, Mail, Shield, LayoutDashboard } from "lucide-react";
+import { Moon, Sun, LogOut, User, Mail, Shield, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -20,8 +20,6 @@ export const DashboardHeader = ({
 }) => {
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
-  
-  // Pulling real user data and logout function from AuthContext
   const { user, logout } = useAuth();
 
   const handleLogout = async () => {
@@ -41,86 +39,96 @@ export const DashboardHeader = ({
   };
 
   return (
-    <header className="flex items-center justify-between py-6 px-2">
+    <header className="gradient-header w-full flex items-center justify-between p-6 shadow-xl shadow-glow/20 animate-fade-in rounded-xl border border-white/10">
+      {/* Left Side: 3D Styled Title */}
       <div className="space-y-1 animate-fade-in">
-        <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-        <p className="text-muted-foreground">{subtitle}</p>
+        <h1 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] filter">
+          {title}
+        </h1>
+        <p className="text-slate-200/80 font-medium">{subtitle}</p>
       </div>
 
-      <div className="flex items-center gap-3"> 
-        {/* Staff Dashboard Redirect Button */}
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="hidden md:flex gap-2 items-center"
-          onClick={() => window.location.href = '/staff'}
+      {/* Right Side Actions: Fixed to the right */}
+      <div className="flex items-center gap-4 ml-auto">
+        {/* Staff Dashboard Button */}
+        <Button
+          variant="secondary"
+          size="sm"
+          className="hidden md:flex gap-2 items-center bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md transition-all shadow-sm"
+          onClick={() => (window.location.href = "/staff")}
         >
           <LayoutDashboard className="h-4 w-4" />
           Staff Dashboard
         </Button>
 
-        <Button
+        {/* Theme Toggle */}
+        {/* <Button
           variant="ghost"
           size="icon"
           onClick={toggleTheme}
-          className="transition-transform hover:scale-105"
+          className="text-white hover:bg-white/10 transition-transform hover:scale-110"
         >
-          {theme === "light" ? (
-            <Moon className="h-5 w-5" />
-          ) : (
-            <Sun className="h-5 w-5" />
-          )}
-        </Button>
+          {theme === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+        </Button> */}
 
         {/* Profile Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-              <Avatar className="h-10 w-10 border-2 border-primary/20">
+            <Button variant="ghost" className="relative h-11 w-11 rounded-full p-0 hover:ring-2 hover:ring-white/50 transition-all">
+              <Avatar className="h-11 w-11 border-2 border-white/30 shadow-md">
                 <AvatarImage src={user?.avatar} alt={user?.name || "User"} />
-                <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+                <AvatarFallback className="bg-white text-black font-bold">
                   {user?.name?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-64" align="end" forceMount>
+          
+          <DropdownMenuContent className="w-72 mt-2" align="end" forceMount>
             <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-2">
+              <div className="flex flex-col space-y-3 p-1">
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarFallback className="bg-primary text-primary-foreground text-lg">
+                  <Avatar className="h-12 w-12 border border-primary/10">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-lg font-bold">
                       {user?.name?.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <p className="text-sm font-semibold">{user?.name || "User Name"}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{user?.role || "Staff"}</p>
+                  <div className="flex flex-col">
+                    <p className="text-sm font-bold leading-none">{user?.name || "User Name"}</p>
+                    <p className="text-xs text-muted-foreground mt-1 capitalize tracking-wide bg-secondary px-2 py-0.5 rounded-full w-fit">
+                      {user?.role || "Staff"}
+                    </p>
                   </div>
                 </div>
               </div>
             </DropdownMenuLabel>
+            
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-3 py-2">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm truncate">{user?.email || "No email provided"}</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="gap-3 py-2">
-              <Shield className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm capitalize">Role: {user?.role || "User"}</span>
-            </DropdownMenuItem>
+            
+            <div className="p-1">
+              <DropdownMenuItem className="gap-3 py-2.5 cursor-pointer">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm truncate">{user?.email || "No email provided"}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-3 py-2.5 cursor-pointer">
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Account Security</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="gap-3 py-2.5 cursor-pointer">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Profile Settings</span>
+              </DropdownMenuItem>
+            </div>
+
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-3 py-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">Profile Settings</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            
             <DropdownMenuItem
-              className="gap-3 py-2 text-destructive focus:text-destructive cursor-pointer"
+              className="gap-3 py-3 text-destructive focus:bg-destructive focus:text-destructive-foreground cursor-pointer m-1 rounded-md"
               onClick={handleLogout}
             >
               <LogOut className="h-4 w-4" />
-              <span className="text-sm font-medium">Logout</span>
+              <span className="text-sm font-bold">Logout System</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

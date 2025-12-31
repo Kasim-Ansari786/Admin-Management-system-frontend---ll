@@ -120,7 +120,7 @@ const LoginForm = ({ onSwitchToSignup }) => {
                     <SelectItem value="staff">
                       <div className="flex items-center gap-2">
                         <Shield className="h-4 w-4 text-primary" />
-                        <span>Admin</span>
+                        <span>Staff</span>
                       </div>
                     </SelectItem>
                   </SelectContent>

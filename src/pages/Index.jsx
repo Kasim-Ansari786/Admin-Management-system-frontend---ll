@@ -138,34 +138,58 @@ const StaffDashboard = () => {
           </div>
 
           {/* Recent Activity */}
-          <Card className="chart-container">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-semibold">
-                Recent Activity
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {(data.recentActivities || []).map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                >
-                  <div className="h-2 w-2 rounded-full bg-primary mt-2" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {activity.action}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {activity.name}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="text-[10px] shrink-0">
-                    {new Date(activity.time).toLocaleDateString()}
-                  </Badge>
+         <Card className="chart-container overflow-hidden border-none shadow-2xl bg-white">
+      <CardHeader className="pb-3 pt-6 px-6">
+        <CardTitle className="text-lg font-bold text-slate-800">
+          Recent Activity
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent className="px-6 pb-10">
+        {/* 3D Perspective Wrapper */}
+        <div className="relative" style={{ perspective: '1200px' }}>
+          
+          {/* THE LIST CONTENT (Floating Layer) */}
+          <div className="relative z-10 space-y-4">
+            {(data.recentActivities || []).map((activity) => (
+              <div
+                key={activity.id}
+                className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:translate-y-[-2px] hover:shadow-md transition-all duration-200"
+              >
+                {/* Glowing Activity Indicator */}
+                <div className="h-2.5 w-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] mt-1.5 shrink-0" />
+                
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-700 truncate">
+                    {activity.action}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">
+                    {activity.name}
+                  </p>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+
+                <Badge variant="secondary" className="text-[10px] bg-slate-200/50 text-slate-600 shrink-0 border-none">
+                  {new Date(activity.time).toLocaleDateString()}
+                </Badge>
+              </div>
+            ))}
+          </div>
+
+          {/* 3D BASE / GROUND PLATE */}
+          <div 
+            className="absolute bottom-[-20px] left-[-2%] right-[-2%] h-[60px] bg-slate-100/60"
+            style={{
+              transform: 'rotateX(75deg)',
+              transformOrigin: 'bottom',
+              borderRadius: '24px',
+              zIndex: 0,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.12)',
+              border: '1px solid rgba(226, 232, 240, 0.8)'
+            }}
+          />
+        </div>
+      </CardContent>
+    </Card>
         </div>
 
         {/* Quick Stats Footer */}
