@@ -1158,16 +1158,21 @@ export const deleteSession = async (session_id) => {
 //fetch the payment details
 export const getPayments = async () => {
   try {
-    // Use shared `api` instance so Authorization header + refresh logic apply
     const response = await api.get('/api/payments');
     return response.data?.data ?? response.data ?? [];
   } catch (error) {
-    console.error("Error fetching payment details:", error?.response ?? error.message ?? error);
+    console.error("❌ Error fetching payment details:", error?.response ?? error.message ?? error);
+    
     const status = error?.response?.status;
     if (status === 401 || status === 403) {
       throw new Error('Unauthorized. Please log in again.');
     }
-    throw new Error(error.response?.data?.message || error.message || 'Failed to fetch payment records.');
+    
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to fetch payment records.'
+    );
   }
 };
 
@@ -1258,23 +1263,27 @@ export const updatePayment = async (paymentId, paymentData) => {
         const response = await fetch(
             `${API_URL}/api/payment/${paymentId}`,
             {
-                method: "PUT", 
+                method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
-                    ...getAuthHeaders(), 
+                    ...getAuthHeaders(),
                 },
                 body: JSON.stringify(paymentData),
             }
         );
-
         if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({ message: `HTTP error! Status: ${response.status}` }));
-            throw new Error(errorBody.error || errorBody.message || `Failed to update payment record ${paymentId}.`);
+            let errorMessage = `Failed to update payment record ${paymentId}.`;
+            try {
+                const errorBody = await response.json();
+                errorMessage = errorBody.error || errorBody.message || errorMessage;
+            } catch (parseError) {
+                errorMessage = `HTTP Error: ${response.status}`;
+            }
+            throw new Error(errorMessage);
         }
-
-        return response.json(); 
+        return await response.json();
     } catch (error) {
-        console.error(`❌ Error updating payment ${paymentId}:`, error);
+        console.error(`❌ API Error - updatePayment (${paymentId}):`, error.message);
         throw error;
     }
 };
