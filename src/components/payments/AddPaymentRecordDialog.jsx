@@ -139,7 +139,7 @@ export default function AddPaymentRecordDialog({ open, onOpenChange, onAddRecord
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="email">Email *</Label>
+                <Label htmlFor="email">Email/UserID *</Label>
                 <Input
                   id="email"
                   type="email"
@@ -194,7 +194,7 @@ export default function AddPaymentRecordDialog({ open, onOpenChange, onAddRecord
                 disabled={isSubmitting}
               />
               <p className="text-sm text-muted-foreground mt-1">
-                Calculated End Date: {calculatedEndDate || 'Select a Start Date'}
+                Calculated End Date: **{calculatedEndDate || 'Select a Start Date'}**
               </p>
               <p className="text-xs text-muted-foreground">
                 End date is automatically set to 1 month after the start date.
@@ -210,7 +210,9 @@ export default function AddPaymentRecordDialog({ open, onOpenChange, onAddRecord
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting}
+            className="bg-[#1A9CFF] hover:bg-[#1A9CFF]/90 text-white shadow-lg shadow-[#1A9CFF]/20 transition-all active:scale-95 disabled:bg-gray-400 disabled:cursor-not-allowed px-8"
+            >
               {isSubmitting ? 'Adding Record...' : 'Add Record'} 
             </Button>
           </DialogFooter>

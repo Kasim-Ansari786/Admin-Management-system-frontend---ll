@@ -5,6 +5,8 @@ import React, {
   useRef,
   useMemo,
 } from "react";
+import { toast } from "sonner";
+import { LogOut, Image as ImageIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -13,9 +15,10 @@ import PendingRegistrationsComponent from "@/components/dashboards/PendingRegist
 import AssignST from "../../pages/AssignST";
 import Venues from "@/components/dashboards/Venues";
 import PaymentsIndex from "@/components/payments/PaymentsIndex";
+import Players from "@/components/dashboards/players";
 import Signup from "@/components/dashboards/Signup";
-// import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import Footer from "../../components/Footer";
+import CoachProfile from "@/components/dashboards/CoachProfile";
 
 import {
   MapPin,
@@ -31,8 +34,10 @@ import {
   Edit,
   Globe,
   Bell,
-  LogOut,
   Loader2,
+  ShieldCheck,
+  Save,
+  Calendar,
   ChevronLeft,
   ChevronRight,
   Trash2,
@@ -73,16 +78,17 @@ import {
 } from "@/components/ui/select";
 
 import {
-  GetPlayerDetails,
-  deletePlayer,
   AddCoachdata,
   GetCoachDetails,
   UpdateCoachdata,
-  DeactivateCoachdata,
+  GetPlayerDetails,
   GetregistrationsData,
   fetchVenuesdetails,
   getVenuesLocation,
+  updateUserAcademy,
+  fetchAcademySettings,
 } from "../../../api";
+const API_URL = "http://localhost:5001";
 
 const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
   const [formData, setFormData] = useState(
@@ -98,12 +104,17 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
       category: "",
       status: "Active",
       active: true,
-    }
+    },
   );
 
   const [isSaving, setIsSaving] = useState(false);
   const [venues, setVenues] = useState([]);
   const [loadingVenues, setLoadingVenues] = useState(false);
+  const navigate = useNavigate();
+  const [players, setPlayers] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+   const [error, setError] = useState(null);
+  const { logout } = useAuth();
   const handleActiveChange = (checked) => {
     setFormData((prev) => ({
       ...prev,
@@ -132,7 +143,7 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
             status: "Active",
             active: true,
             attendance: 0,
-          }
+          },
     );
   }, [coachToEdit]);
 
@@ -168,183 +179,149 @@ const CoachFormDialog = ({ isOpen, onClose, coachToEdit, onSave }) => {
     }
   }, [isOpen, getVenuesLocation]);
 
-  const handleLocationChange = (value) => {
-    const selectedVenue = venues.find((loc) => {
-      const id = loc.id ?? loc.raw?.id;
-      return String(id) === value;
-    });
+  const fetchPlayers = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const playersArray = await GetPlayerDetails();
+      if (!Array.isArray(playersArray)) {
+        throw new Error("API response is not an array of players.");
+      }
 
-    const venueDisplayName =
-      selectedVenue?.name || selectedVenue?.center_head || value;
+      const mappedData = playersArray.map((player) => ({
+        id:
+          player.id ?? player.player_id ?? Math.random().toString(36).slice(2),
+        player_id: player.player_id ?? player.id ?? "N/A",
+        name: player.name ?? player.full_name ?? "Unknown Player",
+        age: player.age ?? 0,
+        address: player.address ?? "",
+        phone_no: player.phone_no ?? player.phone ?? "",
+        center_name: player.center_name ?? player.center ?? "",
+        coach_name: player.coach_name ?? player.coach ?? "",
+        category: player.category ?? "General",
+        status: player.status ?? "Unknown",
+      }));
 
-    setFormData((prev) => ({
-      ...prev,
-      location_id: value,
-      location: venueDisplayName,
-    }));
-  };
+      setPlayers(mappedData);
+      console.log(`Successfully loaded ${mappedData.length} players.`);
+    } catch (err) {
+      console.error("Fetch Players Error:", err);
+      const status = err?.response?.status;
+      const message =
+        err?.response?.data?.error ?? err.message ?? "Failed to load players.";
+      setError(message);
+      toast({
+        title: "Unable to load players",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast, navigate, logout, setPlayers, setIsLoading, setError]);
+
+  useEffect(() => {
+    fetchPlayers();
+  }, [fetchPlayers]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
-    await onSave(formData);
-    setIsSaving(false);
+    try {
+      console.log("[CoachFormDialog] Submitting formData:", formData);
+      await onSave(formData);
+      onClose();
+    } catch (err) {
+      console.error("Failed to save coach:", err);
+    } finally {
+      setIsSaving(false);
+    }
   };
-
-  const title = formData.coach_id ? "Edit Coach" : "Add New Coach";
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            Provide coach details and select the venue/location for this coach.
-          </DialogDescription>
+          <DialogTitle>
+            {coachToEdit ? "Edit Coach" : "Add New Coach"}
+          </DialogTitle>
         </DialogHeader>
-
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            {/* Coach Name */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="coach_name" className="text-right">
-                Name
-              </Label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="coach_name">Coach Name</Label>
               <Input
                 id="coach_name"
-                value={formData.coach_name || ""}
+                value={formData.coach_name}
                 onChange={handleChange}
-                className="col-span-3"
+                placeholder="Enter coach name"
                 required
               />
             </div>
-
-            {/* Location Dropdown */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="location" className="text-right">
-                Location
-              </Label>
-              <div className="col-span-3">
-                <Select
-                  value={formData.location_id?.toString()}
-                  onValueChange={handleLocationChange}
-                >
-                  <SelectTrigger id="location">
-                    <SelectValue
-                      placeholder={
-                        loadingVenues ? "Loading..." : "Select a location"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {loadingVenues ? (
-                      <div className="flex items-center justify-center p-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </div>
-                    ) : venues.length > 0 ? (
-                      venues.map((loc) => {
-                        const id = loc.id ?? loc.raw?.id;
-                        const locationName =
-                          loc.name || loc.center_head || "Unknown Location";
-
-                        return (
-                          <SelectItem key={id} value={String(id)}>
-                            {locationName}
-                          </SelectItem>
-                        );
-                      })
-                    ) : (
-                      <SelectItem disabled value="none">
-                        No locations found
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Phone */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="phone_numbers" className="text-right">
-                Phone
-              </Label>
-              <Input
-                id="phone_numbers"
-                value={formData.phone_numbers || ""}
-                onChange={handleChange}
-                className="col-span-3"
-              />
-            </div>
-
-            {/* Email */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
-                Email
-              </Label>
+            <div>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                value={formData.email || ""}
+                value={formData.email}
                 onChange={handleChange}
-                className="col-span-3"
-                required
+                placeholder="coach@example.com"
               />
             </div>
-
-            {/* Salary */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="salary" className="text-right">
-                Monthly Salary
-              </Label>
+            <div>
+              <Label htmlFor="phone_numbers">Phone</Label>
+              <Input
+                id="phone_numbers"
+                value={formData.phone_numbers}
+                onChange={handleChange}
+                placeholder="Enter phone number"
+              />
+            </div>
+            <div>
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                value={formData.location}
+                onChange={handleChange}
+                placeholder="Enter location"
+              />
+            </div>
+            <div>
+              <Label htmlFor="salary">Monthly Salary</Label>
               <Input
                 id="salary"
                 type="number"
-                value={formData.salary || ""}
+                value={formData.salary}
                 onChange={handleChange}
-                className="col-span-3"
+                placeholder="0"
               />
             </div>
-
-            {/* Session Salary */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="week_salary" className="text-right">
-                Session Salary
-              </Label>
+            <div>
+              <Label htmlFor="week_salary">Weekly Salary</Label>
               <Input
                 id="week_salary"
                 type="number"
-                value={formData.week_salary || ""}
+                value={formData.week_salary}
                 onChange={handleChange}
-                className="col-span-3"
+                placeholder="0"
               />
             </div>
-
-            {/* Status */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="active" className="text-right">
-                Status
-              </Label>
-              <div className="col-span-3 flex items-center justify-between">
-                <span className="text-sm font-medium">{formData.status}</span>
-                <Switch
-                  id="active"
-                  checked={formData.active || false}
-                  onCheckedChange={handleActiveChange}
-                />
-              </div>
-            </div>
           </div>
-
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="active"
+              checked={formData.active}
+              onChange={(e) => handleActiveChange(e.target.checked)}
+            />
+            <Label htmlFor="active">Active</Label>
+          </div>
           <DialogFooter>
+            <Button variant="outline" onClick={onClose} type="button">
+              Cancel
+            </Button>
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>{formData.coach_id ? "Save Changes" : "Add Coach"}</>
-              )}
+              {isSaving ? "Saving..." : "Save Coach"}
             </Button>
           </DialogFooter>
         </form>
@@ -470,20 +447,90 @@ const AcademySettingsTab = () => {
     setSettings((prev) => ({ ...prev, [id]: checked }));
   };
 
-  const handleSave = () => {
-    console.log("Settings saved:", settings);
-    toast({
-      title: "Settings Saved",
-      description: "General academy settings have been successfully updated.",
-      variant: "success",
-    });
+  useEffect(() => {
+    let mounted = true;
+    const loadSettings = async () => {
+      try {
+        const resp = await fetchAcademySettings();
+        // API returns an array of rows or an object
+        const row = Array.isArray(resp) ? resp[0] : (resp?.data ?? resp);
+        const src = Array.isArray(row) ? row[0] : row;
+        if (!src) return;
+        if (!mounted) return;
+        setSettings((prev) => ({
+          ...prev,
+          id: src.id ?? prev.id,
+          siteName: src.site_name ?? prev.siteName,
+          defaultCurrency: src.default_currency ?? prev.defaultCurrency,
+          foundingDate: src.founding_date
+            ? String(src.founding_date).split("T")[0]
+            : prev.foundingDate,
+          activeSince: src.active_since
+            ? String(src.active_since).split("T")[0]
+            : prev.activeSince,
+          validity: src.validity
+            ? String(src.validity).split("T")[0]
+            : prev.validity,
+          address: src.address ?? prev.address,
+          notificationsEnabled:
+            typeof src.notifications_enabled === "boolean"
+              ? src.notifications_enabled
+              : prev.notificationsEnabled,
+          autoBackup:
+            typeof src.auto_backup === "boolean"
+              ? src.auto_backup
+              : prev.autoBackup,
+        }));
+      } catch (err) {
+        console.warn(
+          "Failed to load academy settings:",
+          err?.response?.data || err.message || err,
+        );
+      }
+    };
+    loadSettings();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      const updatedData = await updateUserAcademy(settings);
+
+      // Map back from snake_case to camelCase for state
+      setSettings({
+        id: updatedData.id,
+        siteName: updatedData.site_name,
+        defaultCurrency: updatedData.default_currency,
+        foundingDate: updatedData.founding_date?.split("T")[0], // format for date input
+        activeSince: updatedData.active_since?.split("T")[0],
+        validity: updatedData.validity?.split("T")[0],
+        address: updatedData.address,
+        notificationsEnabled: updatedData.notifications_enabled,
+        autoBackup: updatedData.auto_backup,
+      });
+
+      toast({
+        title: "Settings Saved",
+        description: "Academy settings have been successfully updated.",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description:
+          err.response?.data?.message || "Failed to connect to server.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-card">
+      <Card className="shadow-card border-t-4 border-t-[#1A9CFF]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-[#1A9CFF]">
             <Settings className="h-5 w-5" />
             General Academy Settings
           </CardTitle>
@@ -491,125 +538,162 @@ const AcademySettingsTab = () => {
             Manage core academy information and operational parameters.
           </CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="siteName">Academy Name</Label>
+              <Label htmlFor="siteName" className="font-semibold">
+                Academy Name
+              </Label>
               <Input
                 id="siteName"
+                placeholder="e.g. Global Sports Academy"
                 value={settings.siteName}
                 onChange={handleInputChange}
+                className="focus-visible:ring-[#1A9CFF]"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="defaultCurrency">Default Currency</Label>
+              <Label htmlFor="defaultCurrency" className="font-semibold">
+                Default Currency
+              </Label>
               <Input
                 id="defaultCurrency"
+                placeholder="USD ($)"
                 value={settings.defaultCurrency}
                 onChange={handleInputChange}
+                className="focus-visible:ring-[#1A9CFF]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="foundingDate"
+                className="flex items-center gap-2 font-semibold"
+              >
+                <Calendar className="h-4 w-4 text-slate-500" /> Founding Date
+              </Label>
+              <Input
+                id="foundingDate"
+                type="date"
+                value={settings.foundingDate}
+                onChange={handleInputChange}
+                className="focus-visible:ring-[#1A9CFF]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="activeSince"
+                className="flex items-center gap-2 font-semibold"
+              >
+                <ShieldCheck className="h-4 w-4 text-slate-500" /> Active Since
+                (Service Start)
+              </Label>
+              <Input
+                id="activeSince"
+                type="date"
+                value={settings.activeSince}
+                onChange={handleInputChange}
+                className="focus-visible:ring-[#1A9CFF]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="validity" className="font-semibold">
+                License/Subscription Validity
+              </Label>
+              <Input
+                id="validity"
+                type="date"
+                value={settings.validity}
+                onChange={handleInputChange}
+                className="focus-visible:ring-[#1A9CFF]"
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label
+                htmlFor="address"
+                className="flex items-center gap-2 font-semibold"
+              >
+                <MapPin className="h-4 w-4 text-slate-500" /> Physical Address
+              </Label>
+              <Textarea
+                id="address"
+                placeholder="Enter the full academy address..."
+                value={settings.address}
+                onChange={handleInputChange}
+                className="focus-visible:ring-[#1A9CFF] min-h-[80px]"
               />
             </div>
           </div>
 
-          <hr className="my-4" />
-
-          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-            <div className="flex items-center gap-3">
-              <Bell className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium">Enable Notifications</p>
-                <p className="text-sm text-muted-foreground">
-                  Receive alerts for new registrations and payments.
-                </p>
+          <hr className="my-4 border-slate-100 dark:border-slate-800" />
+          <div className="grid gap-4">
+            <div className="flex items-center justify-between p-4 bg-blue-50/40 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900 transition-all hover:bg-blue-50/60">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white dark:bg-slate-900 rounded-lg shadow-sm">
+                  <Bell className="h-5 w-5 text-[#1A9CFF]" />
+                </div>
+                <div>
+                  <p className="font-medium">Enable Notifications</p>
+                  <p className="text-sm text-muted-foreground">
+                    Receive alerts for new registrations and payments.
+                  </p>
+                </div>
               </div>
+              <Switch
+                checked={settings.notificationsEnabled}
+                onCheckedChange={(checked) =>
+                  handleSwitchChange("notificationsEnabled", checked)
+                }
+                className="data-[state=checked]:bg-[#1A9CFF]"
+              />
             </div>
-            <Switch
-              checked={settings.notificationsEnabled}
-              onCheckedChange={(checked) =>
-                handleSwitchChange("notificationsEnabled", checked)
-              }
-            />
-          </div>
 
-          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-            <div className="flex items-center gap-3">
-              <Globe className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium">Automatic Data Backup</p>
-                <p className="text-sm text-muted-foreground">
-                  Automatically back up data every 24 hours.
-                </p>
+            <div className="flex items-center justify-between p-4 bg-blue-50/40 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900 transition-all hover:bg-blue-50/60">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white dark:bg-slate-900 rounded-lg shadow-sm">
+                  <Globe className="h-5 w-5 text-[#1A9CFF]" />
+                </div>
+                <div>
+                  <p className="font-medium">Automatic Data Backup</p>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically back up data every 24 hours.
+                  </p>
+                </div>
               </div>
+              <Switch
+                checked={settings.autoBackup}
+                onCheckedChange={(checked) =>
+                  handleSwitchChange("autoBackup", checked)
+                }
+                className="data-[state=checked]:bg-[#1A9CFF]"
+              />
             </div>
-            <Switch
-              checked={settings.autoBackup}
-              onCheckedChange={(checked) =>
-                handleSwitchChange("autoBackup", checked)
-              }
-            />
           </div>
-
-          <Button onClick={handleSave} className="w-full mt-6">
-            Save Academy Settings
-          </Button>
+          <div className="flex justify-end w-full">
+            <Button
+              onClick={handleSave}
+              className="mt-6 py-2 px-6 bg-[#1A9CFF] hover:bg-[#1A9CFF]/90 shadow-[0_4px_16px_-4px_rgba(26,156,255,0.4)] transition-all active:scale-[0.98] text-white font-semibold text-sm flex items-center gap-2 h-auto"
+            >
+              <Save className="h-4 w-4" />
+              Save Academy Settings
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
   );
 };
 
-// --- Pagination Control Component (No Change) ---
-const PaginationControls = ({ currentPage, totalPages, paginate }) => {
-  if (totalPages <= 1) return null;
-
-  const pageNumbers = [];
-  for (let i = 1; i <= totalPages; i++) {
-    pageNumbers.push(i);
-  }
-
-  return (
-    <div className="flex justify-between items-center pt-4 border-t mt-4">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => paginate(currentPage - 1)}
-        disabled={currentPage === 1}
-      >
-        <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-      </Button>
-      <div className="flex gap-1">
-        {pageNumbers.map((number) => (
-          <Button
-            key={number}
-            variant={number === currentPage ? "default" : "outline"}
-            size="sm"
-            onClick={() => paginate(number)}
-          >
-            {number}
-          </Button>
-        ))}
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => paginate(currentPage + 1)}
-        disabled={currentPage === totalPages}
-      >
-        Next <ChevronRight className="h-4 w-4 ml-1" />
-      </Button>
-    </div>
-  );
-};
-
-// --- Main Staff Dashboard Component ---
 const StaffDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { logout } = useAuth();
-
   const fileInputRef = useRef(null);
-
   const [coaches, setCoaches] = useState([{}]);
 
   const staffData = {};
@@ -678,33 +762,18 @@ const StaffDashboard = () => {
         throw new Error(
           errorData.error ||
             errorData.message ||
-            `HTTP error! Status: ${response.status}`
+            `HTTP error! Status: ${response.status}`,
         );
       }
       return await response.json();
     } catch (err) {
       if (err instanceof TypeError && err.message === "Failed to fetch") {
         throw new Error(
-          "Connection failed. Please ensure your backend server is running on and CORS is configured correctly."
+          "Connection failed. Please ensure your backend server is running on and CORS is configured correctly.",
         );
       }
       throw err;
     }
-  };
-
-  const openAddCoachModal = () => {
-    setEditingCoach(null);
-    setIsCoachModalOpen(true);
-  };
-  const openEditCoachModal = (coach) => {
-    setEditingCoach({
-      ...coach,
-      coach_id: coach.coach_id,
-      coach_name: coach.coach_name,
-      email: coach.email,
-      address: coach.address,
-    });
-    setIsCoachModalOpen(true);
   };
 
   const closeCoachModal = () => {
@@ -712,27 +781,9 @@ const StaffDashboard = () => {
     setEditingCoach(null);
   };
 
-  const openReviewModal = (registration) => {
-    setReviewingRegistration(registration);
-    setIsReviewModalOpen(true);
-  };
-
   const closeReviewModal = () => {
     setIsReviewModalOpen(false);
     setReviewingRegistration(null);
-  };
-
-  const openAddPlayerModal = () => {
-    navigate("/add-players");
-  };
-
-  const openEditPlayerModal = (player) => {
-    navigate(`/edit-player/${player.id}/${player.player_id}`);
-  };
-
-  const openDeletePlayerModal = (player) => {
-    setPlayerToDelete(player);
-    setIsDeleteModalOpen(true);
   };
 
   const closeDeletePlayerModal = () => {
@@ -740,17 +791,31 @@ const StaffDashboard = () => {
     setPlayerToDelete(null);
   };
 
-  // --- Coach Save/Delete Logic (No Change) ---
   const handleSaveCoach = useCallback(
     async (newCoachData) => {
+      console.log("[handleSaveCoach] Received newCoachData:", newCoachData);
+
       const apiData = {
         ...newCoachData,
         coach_name: newCoachData.coach_name ?? newCoachData.name ?? null,
-        coach_id: newCoachData.coach_id ?? newCoachData.id ?? undefined,
+        coach_id:
+          newCoachData.coach_id !== undefined && newCoachData.coach_id !== null
+            ? newCoachData.coach_id
+            : newCoachData.id !== undefined && newCoachData.id !== null
+              ? newCoachData.id
+              : undefined,
         location: newCoachData.location ?? newCoachData.location ?? null,
       };
 
+      console.log("[handleSaveCoach] Extracted apiData:", apiData);
+
       const isUpdate = !!apiData.coach_id;
+      console.log(
+        "[handleSaveCoach] isUpdate:",
+        isUpdate,
+        "coach_id:",
+        apiData.coach_id,
+      );
 
       if (isUpdate) {
         try {
@@ -765,7 +830,7 @@ const StaffDashboard = () => {
                 };
               }
               return coach;
-            })
+            }),
           );
 
           toast({
@@ -813,54 +878,16 @@ const StaffDashboard = () => {
         closeCoachModal();
       } catch {}
     },
-    [setCoaches, toast, closeCoachModal, UpdateCoachdata, AddCoachdata]
-  );
-
-  const handleDeleteCoach = useCallback(
-    async (coachId, coachName) => {
-      if (
-        !window.confirm(
-          `Are you sure you want to PERMANENTLY DELETE coach ${coachName}? This action cannot be undone.`
-        )
-      ) {
-        return;
-      }
-
-      try {
-        await DeactivateCoachdata(coachId);
-
-        toast({
-          title: "Coach Deleted",
-          description: `Coach ${coachName} has been successfully deleted. The page will now refresh.`,
-          variant: "success",
-        });
-
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
-      } catch (error) {
-        console.error("Error deleting coach:", error);
-        toast({
-          title: "Deletion Failed",
-          description: `Failed to delete coach. Error: ${
-            error.message || "Unknown API error."
-          }`,
-          variant: "destructive",
-        });
-      }
-    },
-    [toast]
+    [setCoaches, toast, closeCoachModal, UpdateCoachdata, AddCoachdata],
   );
 
   // --- Player Delete Logic (No Change) ---
   const handleDeletePlayer = async () => {
     if (!playerToDelete) return;
-
     try {
       await deletePlayer(playerToDelete.id);
-
       setPlayers((prevPlayers) =>
-        prevPlayers.filter((p) => p.id !== playerToDelete.id)
+        prevPlayers.filter((p) => p.id !== playerToDelete.id),
       );
 
       toast({
@@ -890,13 +917,12 @@ const StaffDashboard = () => {
       const responseData = await GetregistrationsData();
       const registrationArray =
         responseData.registrations || responseData.data || responseData || [];
-
       if (Array.isArray(registrationArray)) {
         setAllRegistrations(registrationArray);
       } else {
         console.error(
           "GetregistrationsData did not return an array:",
-          responseData
+          responseData,
         );
         setAllRegistrations([]);
       }
@@ -918,13 +944,12 @@ const StaffDashboard = () => {
     try {
       const responseData = await fetchVenuesdetails();
       const venuesArray = responseData.data || responseData || [];
-
       if (Array.isArray(venuesArray)) {
         setVenues(venuesArray);
       } else {
         console.error(
           "fetchVenuesdetails did not return an array:",
-          responseData
+          responseData,
         );
         setVenues([]);
       }
@@ -936,7 +961,6 @@ const StaffDashboard = () => {
     }
   }, []);
 
-  // --- Effect to fetch venues data (No Change) ---
   useEffect(() => {
     fetchVenuesData();
   }, [fetchVenuesData]);
@@ -947,7 +971,9 @@ const StaffDashboard = () => {
 
     try {
       const responseData = await GetCoachDetails();
-      const coachArray = responseData.data || [];
+      const coachArray = Array.isArray(responseData)
+        ? responseData
+        : responseData?.data || [];
       const mappedData = coachArray.map((coach) => ({
         coach_id: coach.coach_id,
         coach_name: coach.coach_name,
@@ -973,6 +999,17 @@ const StaffDashboard = () => {
   useEffect(() => {
     fetchCoachData();
   }, [fetchCoachData]);
+
+  const handleSignOut = () => {
+    logout();
+    toast({
+      title: "Signed Out",
+      description:
+        "You have been securely logged out and redirected to the login page.",
+      variant: "success",
+    });
+    navigate("/auth");
+  };
 
   const fetchPlayers = useCallback(async () => {
     setIsLoading(true);
@@ -1019,28 +1056,15 @@ const StaffDashboard = () => {
     fetchPlayers();
   }, [fetchPlayers]);
 
-  const handleSignOut = () => {
-    logout();
-    toast({
-      title: "Signed Out",
-      description:
-        "You have been securely logged out and redirected to the login page.",
-      variant: "success",
-    });
-    navigate("/auth");
-  };
-
   const filteredPlayers = useMemo(() => {
     let currentPlayers = players;
-
     if (filterStatus !== "All") {
       currentPlayers = currentPlayers.filter(
-        (player) => player.status === filterStatus
+        (player) => player.status === filterStatus,
       );
     }
 
     if (!searchTerm) return currentPlayers;
-
     const lowerCaseSearch = searchTerm.toLowerCase().trim();
 
     return currentPlayers.filter((player) => {
@@ -1077,30 +1101,32 @@ const StaffDashboard = () => {
   const urlTab = searchParams.get("tab");
   const defaultTab = validTabs.includes(urlTab) ? urlTab : "registrations";
   const [activeTab, setActiveTab] = useState(defaultTab);
+  const { user, updateAvatar } = useAuth();
   const playersToPaginate = filteredPlayers;
   const indexOfLastPlayer = currentPage * playersPerPage;
   const indexOfFirstPlayer = indexOfLastPlayer - playersPerPage;
+  const [logoUrl, setLogoUrl] = useState(user?.logo || null);
   const currentPlayers = playersToPaginate.slice(
     indexOfFirstPlayer,
-    indexOfLastPlayer
+    indexOfLastPlayer,
   );
   const totalPages = Math.ceil(playersToPaginate.length / playersPerPage);
 
-  const paginate = (pageNumber) => {
-    setCurrentPage(pageNumber);
+  useEffect(() => {
+    if (user?.logo) {
+      setLogoUrl(user.logo);
+    }
+  }, [user]);
+
+  const getFullImageUrl = (path) => {
+    if (!path) return null;
+    if (path.startsWith("http")) return path;
+    return `${API_URL}${path.startsWith("/") ? "" : "/"}${path}`;
   };
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterStatus]);
-
-  const handleTabClick = (value) => {
-    if (value === "venues") {
-      navigate("/venues");
-    } else if (value === "players") {
-      navigate("/add-player");
-    }
-  };
 
   const handleTabChange = (newTab) => {
     if (validTabs.includes(newTab)) {
@@ -1132,10 +1158,9 @@ const StaffDashboard = () => {
   // 2. Active Venues Count Logic
   const activeVenuesCount = useMemo(() => {
     if (!Array.isArray(venues)) return 0;
-
     return venues.filter(
       (venue) =>
-        venue?.status?.toLowerCase() === "active" || venue?.active === true
+        venue?.status?.toLowerCase() === "active" || venue?.active === true,
     ).length;
   }, [venues]);
 
@@ -1147,49 +1172,60 @@ const StaffDashboard = () => {
     activeVenuesCount
   );
 
-  const handleNotifications = () => {
-    // Your notifications logic here
-    console.log("Opening notifications...");
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       <CoachFormDialog
         isOpen={isCoachModalOpen}
         onClose={closeCoachModal}
         coachToEdit={editingCoach}
         onSave={handleSaveCoach}
       />
-
       <RegistrationReviewDialog
         isOpen={isReviewModalOpen}
         onClose={closeReviewModal}
         registration={reviewingRegistration}
       />
-
       <DeleteConfirmationDialog
         isOpen={isDeleteModalOpen}
         onClose={closeDeletePlayerModal}
         onConfirm={handleDeletePlayer}
         name={playerToDelete?.name || "this player"}
       />
+      <div
+        className="w-full shadow-lg shadow-blue-500/20 animate-fade-in p-6 flex items-center justify-between rounded-b-2xl"
+        style={{
+          background: `linear-gradient(135deg, #1A9CFF 0%, #0076FF 100%)`,
+        }}
+      >
+        <div className="flex items-center gap-4">
+          <div className="h-14 w-14 rounded-full border-2 border-white/30 bg-white/10 backdrop-blur-sm flex items-center justify-center overflow-hidden shadow-inner">
+            {logoUrl ? (
+              <img
+                src={getFullImageUrl(logoUrl)}
+                alt="Academy Logo"
+                className="h-full w-full object-cover"
+                onError={() => setLogoUrl(null)}
+              />
+            ) : (
+              <ImageIcon className="h-7 w-7 text-white" />
+            )}
+          </div>
 
-      <div className="gradient-header w-full shadow-lg shadow-glow animate-fade-in p-6 flex items-center justify-between">
-        {/* Left Section: Text */}
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-white">
-            Staff Administration
-          </h1>
-          <p className="text-white/90 text-sm">
-            Complete academy management and oversight
-          </p>
+          <div className="space-y-0.5">
+            <h1 className="text-2xl font-bold text-white tracking-tight leading-none">
+              Staff Administration
+            </h1>
+            <p className="text-blue-50 text-sm opacity-90">
+              Complete academy management and oversight
+            </p>
+          </div>
         </div>
 
         {/* Right Section: Buttons */}
         <div className="flex items-center gap-3">
           <Button
             variant="secondary"
-            className="bg-white/10 hover:bg-white/20 text-white border-none backdrop-blur-sm transition-colors"
+            className="bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-md transition-all duration-200"
             onClick={handleSignOut}
           >
             <LogOut className="h-4 w-4 mr-2" />
@@ -1197,10 +1233,8 @@ const StaffDashboard = () => {
           </Button>
         </div>
       </div>
-
       {/* Data Cards Grid (FIXED) */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-2">
-        {/* Pending Registrations */}
         <Card className="group transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl border-b-4 border-b-yellow-500 shadow-md">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -1235,7 +1269,7 @@ const StaffDashboard = () => {
                   )}
                 </p>
                 <p className="text-[10px] uppercase font-semibold text-muted-foreground">
-                  Student
+                  Students
                 </p>
               </div>
             </div>
@@ -1261,7 +1295,6 @@ const StaffDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Active Coaches */}
         <Card className="group transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl border-b-4 border-b-indigo-500 shadow-md">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -1273,14 +1306,13 @@ const StaffDashboard = () => {
                   {coaches.filter((c) => c.status === "Active").length}
                 </p>
                 <p className="text-[10px] uppercase font-semibold text-muted-foreground">
-                  Teacher
+                  Teachers
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Active Venues */}
         <Card className="group transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl border-b-4 border-b-blue-600 shadow-md">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -1292,21 +1324,19 @@ const StaffDashboard = () => {
                   {venuesCountDisplay}
                 </p>
                 <p className="text-[10px] uppercase font-semibold text-muted-foreground">
-                  Center
+                  Centers
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
-
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
         className="space-y-4"
       >
         <TabsList className="grid w-full grid-cols-9 gap-3 p-1 bg-slate-100 rounded-xl border-b-4 border-slate-300 shadow-[0_8px_0_0_rgba(0,0,0,0.1)]">
-          {/* Example of the 'Dashboard' Tab with 3D styling */}
           <TabsTrigger
             value="dashboard"
             asChild
@@ -1331,7 +1361,7 @@ const StaffDashboard = () => {
             Academy Settings
           </TabsTrigger>
           <TabsTrigger value="Assigned" className="3d-tab">
-            Assign Student
+            Assign Students
           </TabsTrigger>
           <TabsTrigger value="venues" className="3d-tab">
             Center Management
@@ -1340,10 +1370,6 @@ const StaffDashboard = () => {
             Admin Access
           </TabsTrigger>
         </TabsList>
-        {/* 
-        <TabsContent value="Dashboard">
-          <DashboardHeader />
-        </TabsContent> */}
 
         <TabsContent value="venues">
           <Venues />
@@ -1361,275 +1387,25 @@ const StaffDashboard = () => {
           <AssignST />
         </TabsContent>
 
-        <TabsContent value="players" className="space-y-4">
-          <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Student Management
-                </CardTitle>
-                <CardDescription>
-                  Manage all registered students and their details
-                </CardDescription>
-              </div>
-              <div className="flex flex-col sm:flex-row items-end gap-3 w-full max-w-lg ml-auto">
-                <div className="relative w-full sm:w-[250px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    placeholder="Search by name, player ID, or phone number..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-full"
-                  />
-                </div>
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-full sm:w-[150px] flex-shrink-0">
-                    <span className="text-muted-foreground mr-2">Status:</span>
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Statuses</SelectItem>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Inactive">Inactive</SelectItem>
-                    <SelectItem value="Unknown">Unknown</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  size="sm"
-                  onClick={openAddPlayerModal}
-                  className="w-full sm:w-auto flex-shrink-0"
-                >
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Add New Student
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="space-y-3">
-                {isLoading ? (
-                  <div className="flex justify-center items-center p-8 text-muted-foreground">
-                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                    Fetching student data...
-                  </div>
-                ) : currentPlayers.length === 0 ? (
-                  <div className="flex flex-col justify-center items-center p-8 text-muted-foreground">
-                    <AlertCircle className="h-8 w-8 mb-2" />
-                    <p className="font-medium">
-                      {searchTerm || filterStatus !== "All"
-                        ? `No results found for current filters.`
-                        : "No Player Records Found"}
-                    </p>
-                    <p className="text-sm">
-                      Click "Add New student" or check your server connection.
-                    </p>
-                    {error && (
-                      <p className="text-xs text-red-500 mt-2">
-                        Error: {error}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  currentPlayers.map((player, _pidx) => (
-                    <div
-                      key={player?.id ?? player?.player_id ?? `player-${_pidx}`}
-                      className="flex items-start justify-between p-4 bg-muted rounded-lg"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-bold shrink-0 mt-1">
-                          {(player.name || "").charAt(0).toUpperCase() || "-"}
-                        </div>
-                        <div className="space-y-1">
-                          <div className="font-medium">
-                            {player.name}{" "}
-                            <Badge
-                              variant="secondary"
-                              className="ml-2 font-mono"
-                            >
-                              {player.player_id}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Age {player.age} • Center: {player.center_name}
-                          </p>
-                          <p className="text-xs text-muted-foreground max-w-md">
-                            Address: {player.address} • Phone: {player.phone_no}
-                          </p>
-                          {/* <p className="text-xs text-muted-foreground">
-                            Coach: {player.coach_name}
-                          </p> */}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <Badge
-                          variant={
-                            player.status === "Active" ? "default" : "secondary"
-                          }
-                        >
-                          {player.status}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openEditPlayerModal(player)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => openDeletePlayerModal(player)}
-                          className="p-2 h-8 w-8"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              {filteredPlayers.length > playersPerPage && (
-                <PaginationControls
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  paginate={paginate}
-                />
-              )}
-            </CardContent>
-          </Card>
+        <TabsContent value="players">
+          <Players />
         </TabsContent>
 
         <TabsContent value="payments">
           <PaymentsIndex />
         </TabsContent>
 
-        <TabsContent value="coaches" className="space-y-4">
-          <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Teacher Management
-                </CardTitle>
-                <CardDescription>
-                  Manage coaching staff and their assignments
-                </CardDescription>
-              </div>
-              <Button size="sm" onClick={openAddCoachModal}>
-                <UserPlus className="h-4 w-4 mr-2" />
-                Add New Teacher
-              </Button>
-            </CardHeader>
-
-            <CardContent className="pt-4">
-              <div className="space-y-3">
-                {coaches.map((coach, _cidx) => (
-                  <div
-                    key={coach?.coach_id ?? coach?.id ?? `coach-${_cidx}`}
-                    className="flex items-center justify-between p-4 bg-muted rounded-lg cursor-pointer hover:bg-accent"
-                    onClick={() => navigate(`/coach-old/${coach.coach_id}`)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
-                        {coach.coach_name ? coach.coach_name.charAt(0) : "?"}
-                      </div>
-
-                      <div>
-                        <p className="font-medium flex items-center gap-2">
-                          {coach.coach_name}
-                          <span className="text-sm font-normal text-gray-500">
-                            ({coach.phone_numbers})
-                          </span>
-                          <span className="text-sm font-normal text-green-600">
-                            (₹{coach.week_salary} /session)
-                          </span>
-                        </p>
-
-                        <p className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
-                          <span className="font-normal">{coach.email}</span>
-                          <span className="font-normal">
-                            • {coach.location}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      className="flex items-center gap-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="text-right hidden sm:block">
-                        <p className="text-sm font-medium">
-                          ₹{Number(coach.salary ?? 0).toLocaleString()}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Monthly</p>
-                      </div>
-
-                      <Badge
-                        variant={
-                          coach.status === "Active" ? "default" : "secondary"
-                        }
-                      >
-                        {coach.status}
-                      </Badge>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEditCoachModal(coach)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() =>
-                          handleDeleteCoach(
-                            coach.id || coach.coach_id,
-                            coach.coach_name
-                          )
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value="coaches">
+          <CoachProfile />
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
           <AcademySettingsTab />
         </TabsContent>
       </Tabs>
-      <footer className="w-full py-2 bg-white border-t border-gray-10 mt-auto">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
-            {/* Brand Info */}
-            <p className="text-sm font-semibold text-gray-800">
-              One-Admin | Admin Management System (SaaS)
-            </p>
-            <div className="mt-4 flex justify-center">
-              <p className="text-xs text-gray-500">
-                © All Rights Reserved | 2026 - 2028
-              </p>
-            </div>
-
-            {/* Credit Info */}
-            <div className="flex items-center text-sm text-gray-600">
-              <span>Made in India with</span>
-              <Heart className="h-4 w-4 mx-1 text-red-500 fill-current" />
-              <span className="font-bold text-gray-800">
-                Comdata Innovation Pvt Ltd.
-              </span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <div className="flex flex-col overflow-hidden bg-gray-50">
+        <Footer />
+      </div>
     </div>
   );
 };

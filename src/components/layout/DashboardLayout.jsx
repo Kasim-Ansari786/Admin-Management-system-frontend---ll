@@ -8,7 +8,7 @@ const DashboardLayout = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="gradient-header w-full flex items-center gap-6 p-6 shadow-lg shadow-glow animate-fade-in rounded-xl">
+      {/* <header className="gradient-header w-full flex items-center gap-6 p-6 shadow-lg shadow-glow animate-fade-in rounded-xl">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <span className="text-2xl">📚</span>
@@ -34,7 +34,8 @@ const DashboardLayout = ({ children }) => {
             </Button>
           </div>
         </div>
-      </header>
+      </header> */}
+      
       <main className="container mx-auto px-4 py-6">{children}</main>
     </div>
   );

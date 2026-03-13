@@ -37,10 +37,10 @@ export const AssignStudents = ({ coaches, students, onAssign }) => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
             <UserPlus className="h-5 w-5 text-primary" />
-            Assign Student to Coach
+            Assign Student to Teacher
           </CardTitle>
           <CardDescription className="text-muted-foreground">
-            Select a student and assign them to a coach
+            Select a student and assign them to a Teacher
           </CardDescription>
         </CardHeader>
 
@@ -48,7 +48,7 @@ export const AssignStudents = ({ coaches, students, onAssign }) => {
           <div className="grid gap-4 md:grid-cols-2">
             {/* Select Student */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Select Student</label>
+              <label className="text-sm font-medium text-foreground">Select player</label>
               <Select
                 value={selectedStudent?.toString()}
                 onValueChange={(value) => setSelectedStudent(Number(value))}
@@ -104,7 +104,7 @@ export const AssignStudents = ({ coaches, students, onAssign }) => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
             <Users className="h-5 w-5 text-muted-foreground" />
-            Unassigned Students ({unassignedStudents.length})
+            Unassigned Players ({unassignedStudents.length})
           </CardTitle>
         </CardHeader>
 
@@ -130,7 +130,7 @@ export const AssignStudents = ({ coaches, students, onAssign }) => {
             </div>
           ) : (
             <p className="text-center text-muted-foreground py-8">
-              All students have been assigned to coaches
+              All players have been assigned to coaches
             </p>
           )}
         </CardContent>
@@ -141,7 +141,7 @@ export const AssignStudents = ({ coaches, students, onAssign }) => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
             <Users className="h-5 w-5 text-success" />
-            Assigned Students ({assignedStudents.length})
+            Assigned Players ({assignedStudents.length})
           </CardTitle>
         </CardHeader>
 
@@ -175,7 +175,7 @@ export const AssignStudents = ({ coaches, students, onAssign }) => {
             </div>
           ) : (
             <p className="text-center text-muted-foreground py-8">
-              No students have been assigned yet
+              No players have been assigned yet
             </p>
           )}
         </CardContent>

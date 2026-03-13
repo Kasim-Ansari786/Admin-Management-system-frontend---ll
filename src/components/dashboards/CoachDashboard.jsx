@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import Footer from "../../components/Footer";
 import Schedule from "../../pages/Schedule";
 import {
   Users,
@@ -124,7 +125,6 @@ const CoachDashboard = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterDate, setFilterDate] = useState("all");
   const [records, setRecords] = useState([]);
-  const [mockAttendanceRecords, setMockAttendanceRecords] = useState([]);
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const recordsPerPage = 8;
@@ -146,6 +146,9 @@ const CoachDashboard = () => {
     const coachIdToSend = user?.id;
     const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+    const SMS_API_KEY =
+      "p4vdCWRoDUlwfyZ3hqrL1gGIeQxP2akFmA9T7uSMz6bXtJnNicV1oPuNiCUZwzLmsbH5phOvTY3Bgxd6";
+
     if (!coachIdToSend || !token) {
       toast({
         title: "Error",
@@ -156,16 +159,14 @@ const CoachDashboard = () => {
       return;
     }
 
-    // Initialize with nulls to ensure the keys exist
     let locationData = { lat: null, lon: null, addr: "Location not shared" };
 
     try {
-      // Wrap geolocation in a try-catch to ensure we still submit attendance even if GPS fails
       try {
         const position = await new Promise((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, {
             enableHighAccuracy: true,
-            timeout: 10000, // Increased to 10s for better reliability
+            timeout: 10000,
           });
         });
 
@@ -173,7 +174,6 @@ const CoachDashboard = () => {
         locationData.lat = latitude;
         locationData.lon = longitude;
 
-        // Reverse Geocode
         const geoRes = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
         );
@@ -182,15 +182,13 @@ const CoachDashboard = () => {
           locationData.addr = geoData.display_name || "Address not found";
         }
       } catch (locErr) {
-        console.warn("Location capture failed or timed out:", locErr.message);
+        console.warn("Location capture failed:", locErr.message);
       }
 
-      // Map through players and call recordAttendance
       const promises = assignedPlayers.map((player) => {
         const isPresent =
           (localAttendance[player.id] || "present") === "present";
 
-        // Explicitly pass the gathered location data
         return recordAttendance(
           {
             playerId: player.id,
@@ -207,9 +205,37 @@ const CoachDashboard = () => {
       });
 
       await Promise.all(promises);
+
+      // Refresh records after submission
+      const updatedRecords = await GetAttendanceRecords(user.id);
+      setRecords(
+        Array.isArray(updatedRecords)
+          ? updatedRecords
+          : updatedRecords?.records || []
+      );
+
+      const presentPlayersPhoneNumbers = assignedPlayers
+        .filter(
+          (p) => (localAttendance[p.id] || "present") === "present" && p.phone
+        )
+        .map((p) => p.phone)
+        .join(",");
+
+      if (presentPlayersPhoneNumbers) {
+        try {
+          const message = `Attendance recorded for ${dateString}. Your child was present for the session.`;
+          const encodedMessage = encodeURIComponent(message);
+          const smsUrl = `https://www.fast2sms.com/dev/bulkV2?authorization=${SMS_API_KEY}&route=q&numbers=${presentPlayersPhoneNumbers}&message=${encodedMessage}`;
+
+          await fetch(smsUrl, { method: "GET" });
+        } catch (smsErr) {
+          console.error("SMS Gateway Error:", smsErr);
+        }
+      }
+
       toast({
         title: "Success",
-        description: "Attendance and location saved!",
+        description: "Attendance saved and notifications sent!",
         variant: "success",
       });
     } catch (error) {
@@ -228,7 +254,6 @@ const CoachDashboard = () => {
     navigate("/auth");
   };
 
-  // Logic for filtering and data normalization
   const normalizeDate = (dateStr) => {
     if (!dateStr) return null;
     try {
@@ -239,16 +264,22 @@ const CoachDashboard = () => {
     }
   };
 
+  // FIXED: Normalized "Marked By" logic to handle multiple possible field names from API
   const allRecordsUnified = useMemo(() => {
     return records.map((r) => ({
       id: r.id || `${r.player_id}-${r.attendance_date}`,
       name: r.player_name || r.name || "Unknown Player",
       date: normalizeDate(r.attendance_date || r.date),
       status: r.attendance_status || (r.is_present ? "Present" : "Absent"),
-      markedBy: r.recorded_by_coach_name || r.marked_by || "Coach",
+      markedBy:
+        r.recorded_by_coach_name ||
+        r.coach_name ||
+        r.marked_by ||
+        user?.name ||
+        "Coach",
       time: r.created_at || r.created_time || "—",
     }));
-  }, [records]);
+  }, [records, user?.name]);
 
   const filteredRecords = useMemo(() => {
     return allRecordsUnified.filter((r) => {
@@ -261,7 +292,6 @@ const CoachDashboard = () => {
     });
   }, [allRecordsUnified, searchTerm, filterStatus, filterDate]);
 
-  // Pagination Logic
   const totalPages = Math.ceil(filteredRecords.length / recordsPerPage);
   const indexOfLastRecord = currentPage * recordsPerPage;
   const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
@@ -290,33 +320,32 @@ const CoachDashboard = () => {
     if (user?.id && token) {
       const loadData = async () => {
         setIsLoadingRecords(true);
+        setIsLoadingPlayers(true);
         try {
           const data = await GetAttendanceRecords(user.id);
           setRecords(Array.isArray(data) ? data : data?.records || []);
+
           const players = await fetchCoachAssignedPlayers(token);
           setAssignedPlayers(players || []);
+
           const scheduleData = await fetchSessionData(user.id, token);
           const processed = processScheduleData(scheduleData);
           setSchedule({
             today: processed.todaysSchedule,
             weekly: processed.weeklySchedule,
           });
+          setTodaysSchedule(processed.todaysSchedule);
         } catch (err) {
           console.error(err);
         } finally {
           setIsLoadingRecords(false);
+          setIsLoadingPlayers(false);
           setIsLoadingSchedule(false);
         }
       };
       loadData();
     }
   }, [user?.id, token]);
-
-  const getStatusBadge = (status) => (
-    <Badge variant={status === "Present" ? "default" : "secondary"}>
-      {status}
-    </Badge>
-  );
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "—";
@@ -353,31 +382,42 @@ const CoachDashboard = () => {
   if (!user) return null;
 
   return (
-    <div className="space-y-6">
-      <div className="gradient-header w-full flex items-center gap-6 p-6 shadow-lg shadow-glow animate-fade-in rounded-xl">
+    <div className="space-y-6 pb-10">
+      <div className="w-full bg-[#1A9CFF] animate-fade-in p-6 flex items-center justify-between border-b border-white/10 shadow-none">
         <div className="flex-grow">
-          <h1 className="text-primary-foreground/80">Teacher Dashboard</h1>
-          <p className="text-primary-foreground/80">
+          <h1 className="text-white/90 text-sm font-medium uppercase tracking-wider">
+            Coach Dashboard
+          </h1>
+          <p className="text-white text-2xl mt-1">
             Welcome back,{" "}
-            <span className="font-semibold">{user?.name || "Coach"}</span>
+            <span className="font-bold">{user?.name || "Coach"}</span>
           </p>
         </div>
 
         <div className="ml-8 text-right self-center">
-          <div className="mt-2 text-sm text-primary-foreground/70 space-y-1">
-            <p className="font-bold">Email: {user?.email || "—"}</p>
-            <p>Role: {user?.role || "—"}</p>
+          <div className="text-sm text-white/80 space-y-1">
+            <p className="font-semibold flex items-center justify-end gap-2">
+              <span className="opacity-70 font-normal">Email:</span>{" "}
+              {user?.email || "—"}
+            </p>
+
+            <Button
+              variant="secondary"
+              className="ml-7 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground"
+              onClick={handleSignOut}
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Card 1: Assigned Players */}
-        <Card className="group relative overflow-hidden border-none bg-white rounded-2xl transition-all duration-300 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.1),0_4px_6px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_10px_10px_-5px_rgba(0,0,0,0.04)] hover:-translate-y-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 px-4">
+        <Card className="group relative overflow-hidden border-none bg-white rounded-2xl transition-all duration-300 shadow-md hover:-translate-y-2">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary/10 rounded-xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] group-hover:scale-110 transition-transform duration-300">
+              <div className="p-3 bg-primary/10 rounded-xl">
                 <Users className="h-6 w-6 text-primary" />
               </div>
               <div>
@@ -385,19 +425,17 @@ const CoachDashboard = () => {
                   {isLoadingPlayers ? "..." : assignedPlayers.length}
                 </p>
                 <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                  Assigned student
+                  Assigned students
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Card 2: Today's Sessions */}
-        <Card className="group relative overflow-hidden border-none bg-white rounded-2xl transition-all duration-300 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.1),0_4px_6px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_10px_10px_-5px_rgba(0,0,0,0.04)] hover:-translate-y-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+        <Card className="group relative overflow-hidden border-none bg-white rounded-2xl transition-all duration-300 shadow-md hover:-translate-y-2">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary/10 rounded-xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] group-hover:scale-110 transition-transform duration-300">
+              <div className="p-3 bg-primary/10 rounded-xl">
                 <CalendarIcon className="h-6 w-6 text-primary" />
               </div>
               <div>
@@ -412,12 +450,10 @@ const CoachDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Card 3: Completed Today */}
-        <Card className="group relative overflow-hidden border-none bg-white rounded-2xl transition-all duration-300 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.1),0_4px_6px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_10px_10px_-5px_rgba(0,0,0,0.04)] hover:-translate-y-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent pointer-events-none" />
+        <Card className="group relative overflow-hidden border-none bg-white rounded-2xl transition-all duration-300 shadow-md hover:-translate-y-2">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-100 rounded-xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] group-hover:scale-110 transition-transform duration-300">
+              <div className="p-3 bg-green-100 rounded-xl">
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
               <div>
@@ -435,12 +471,10 @@ const CoachDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Card 4: Avg Attendance */}
-        <Card className="group relative overflow-hidden border-none bg-white rounded-2xl transition-all duration-300 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.1),0_4px_6px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_10px_10px_-5px_rgba(0,0,0,0.04)] hover:-translate-y-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+        <Card className="group relative overflow-hidden border-none bg-white rounded-2xl transition-all duration-300 shadow-md hover:-translate-y-2">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary/10 rounded-xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] group-hover:scale-110 transition-transform duration-300">
+              <div className="p-3 bg-primary/10 rounded-xl">
                 <Target className="h-6 w-6 text-primary" />
               </div>
               <div>
@@ -456,89 +490,87 @@ const CoachDashboard = () => {
         </Card>
       </div>
 
-      <Tabs defaultValue="players" className="space-y-4">
+      <Tabs defaultValue="players" className="space-y-4 px-4">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="players">Assigned student</TabsTrigger>
+          <TabsTrigger value="players">Assigned Students</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="records">Records</TabsTrigger>
         </TabsList>
 
         <TabsContent value="players" className="space-y-4">
-          <Card className="shadow-card">
+          <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Assigned student
+                Assigned Students
               </CardTitle>
               <CardDescription>
-                Manage your assigned student and track their progress
+                Manage your assigned students and track their progress
               </CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingPlayers ? (
                 <div className="p-4 text-center text-muted-foreground">
-                  Loading players...
+                  Loading students...
                 </div>
               ) : assignedPlayers.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">
-                  No players assigned to coach {user.email} or failed to fetch.
+                  No students assigned.
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {assignedPlayers.map((player) => {
-                    return (
-                      <div
-                        key={player.id}
-                        className="flex items-center justify-between p-4 bg-muted rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
-                            {player.name ? player.name.charAt(0) : "?"}
-                          </div>
-                          <div>
-                            <p className="font-medium">
-                              {player.name || "Unnamed Player"}
-                            </p>
-                            <p className="text-xs text-muted-foreground mb-1">
-                              ID: {player.id || "—"}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Age {player.age ?? "—"}
-                            </p>
-                          </div>
+                  {assignedPlayers.map((player) => (
+                    <div
+                      key={player.id}
+                      className="flex items-center justify-between p-4 bg-muted rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+                          style={{ backgroundColor: "#1A9CFF" }}
+                        >
+                          {player.name ? player.name.charAt(0) : "?"}
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="text-sm font-medium">
-                              {typeof player.attendance === "number"
-                                ? `${player.attendance}%`
-                                : player.attendance
-                                ? `${player.attendance}%`
-                                : "—"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Attendance
-                            </p>
-                          </div>
-                          <Badge
-                            variant={
-                              player.status === "Active"
-                                ? "default"
-                                : "secondary"
-                            }
-                          >
-                            {player.status || "Unknown"}
-                          </Badge>
+                        <div>
+                          <p className="font-medium">
+                            {player.name || "Unnamed Player"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            ID: {player.id || "—"}
+                          </p>
                         </div>
                       </div>
-                    );
-                  })}
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-sm font-medium">
+                            {player.attendance || 0}%
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Attendance
+                          </p>
+                        </div>
+                        <Badge
+                          variant={
+                            player.status === "Active" ? "default" : "secondary"
+                          }
+                          className={
+                            player.status === "Active"
+                              ? "bg-[#1A9CFF] hover:bg-[#1580d1]"
+                              : ""
+                          }
+                        >
+                          {player.status || "Unknown"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
+
         <TabsContent value="schedule" className="space-y-4">
           <Schedule />
         </TabsContent>
@@ -548,8 +580,8 @@ const CoachDashboard = () => {
             <CardHeader>
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-primary">
-                    <ClipboardList className="h-5 w-5 text-primary-foreground" />
+                  <div className="p-2.5 rounded-xl bg-[#1A9CFF]">
+                    <ClipboardList className="h-5 w-5 text-white" />
                   </div>
                   <div>
                     <CardTitle className="text-xl">
@@ -565,7 +597,6 @@ const CoachDashboard = () => {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      type="text"
                       placeholder="Search players..."
                       value={searchTerm}
                       onChange={(e) =>
@@ -574,6 +605,22 @@ const CoachDashboard = () => {
                       className="pl-10 w-full sm:w-[180px]"
                     />
                   </div>
+
+                  <Select
+                    value={filterStatus}
+                    onValueChange={(v) =>
+                      handleFilterChange(setFilterStatus, v)
+                    }
+                  >
+                    <SelectTrigger className="w-full sm:w-[120px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="Present">Present</SelectItem>
+                      <SelectItem value="Absent">Absent</SelectItem>
+                    </SelectContent>
+                  </Select>
 
                   <Select
                     value={filterStatus}
@@ -612,7 +659,7 @@ const CoachDashboard = () => {
                   <Button
                     onClick={handleExport}
                     variant="outline"
-                    className="gap-2"
+                    className="gap-2 border-[#1A9CFF] text-[#1A9CFF] hover:bg-[#1A9CFF] hover:text-white"
                   >
                     <Download className="h-4 w-4" />
                     Export
@@ -626,7 +673,7 @@ const CoachDashboard = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Player</TableHead>
+                      <TableHead>Student</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Marked By</TableHead>
@@ -647,74 +694,69 @@ const CoachDashboard = () => {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      paginatedRecords.map((record) => (
-                        <TableRow key={record.id}>
-                          <TableCell className="font-medium">
-                            {record.name}
-                          </TableCell>
-                          <TableCell>
-                            {formatDate(record.date || record.attendance_date)}
-                          </TableCell>
-                          <TableCell>
-                            {getStatusBadge(
-                              record.status || record.attendance_status
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {record.markedBy || record.coach_name}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-xs">
-                            {formatTime(record.time || record.created_time)}
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      paginatedRecords.map((record) => {
+                        let statusClass =
+                          record.status === "Present"
+                            ? "text-emerald-600 bg-emerald-50 border-emerald-200"
+                            : "text-red-600 bg-red-50 border-red-200";
+
+                        return (
+                          <TableRow key={record.id}>
+                            <TableCell className="font-medium">
+                              {record.name}
+                            </TableCell>
+                            <TableCell>{formatDate(record.date)}</TableCell>
+                            <TableCell>
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${statusClass}`}
+                              >
+                                {record.status}
+                              </span>
+                            </TableCell>
+                            <TableCell>{record.markedBy}</TableCell>
+                            <TableCell className="text-muted-foreground text-xs">
+                              {formatTime(record.time)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
               </div>
 
-              {/* Pagination Controls */}
-              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-sm text-muted-foreground">
-                  Showing{" "}
-                  <span className="font-medium">{indexOfFirstRecord + 1}</span>{" "}
-                  to{" "}
-                  <span className="font-medium">
-                    {Math.min(indexOfLastRecord, filteredRecords.length)}
-                  </span>{" "}
-                  of{" "}
-                  <span className="font-medium">{filteredRecords.length}</span>{" "}
-                  records
-                </div>
-
-                {totalPages > 1 && (
+              {totalPages > 1 && (
+                <div className="mt-4 flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {indexOfFirstRecord + 1} to{" "}
+                    {Math.min(indexOfLastRecord, filteredRecords.length)} of{" "}
+                    {filteredRecords.length}
+                  </p>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.max(prev - 1, 1))
-                      }
+                      onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                       disabled={currentPage === 1}
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <div className="text-sm font-medium">
+                    <span className="text-sm">
                       Page {currentPage} of {totalPages}
-                    </div>
+                    </span>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() =>
-                        setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                        setCurrentPage((p) => Math.min(p + 1, totalPages))
                       }
                       disabled={currentPage === totalPages}
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -728,7 +770,7 @@ const CoachDashboard = () => {
                   Mark Attendance
                 </CardTitle>
                 <CardDescription>
-                  Mark players' attendance for the selected date:- &nbsp;
+                  Mark Student attendance for the selected date:- &nbsp;
                   {selectedDate.toLocaleDateString()}
                 </CardDescription>
               </CardHeader>
@@ -744,7 +786,11 @@ const CoachDashboard = () => {
                         className="flex items-center justify-between p-3 bg-muted rounded-lg"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-bold">
+                          {/* Changed to #1A9CFF */}
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                            style={{ backgroundColor: "#1A9CFF" }}
+                          >
                             {player.name ? player.name.charAt(0) : "?"}
                           </div>
                           <span className="font-medium">
@@ -777,7 +823,8 @@ const CoachDashboard = () => {
                                 handleAttendanceChange(player.id, newStatus);
                               }}
                             />
-                            <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            {/* Updated Toggle Colors: peer-checked:bg-[#1A9CFF] and focus ring */}
+                            <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-[#1A9CFF]/30 dark:peer-focus:ring-[#1A9CFF]/50 dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[#1A9CFF]"></div>
                           </label>
                         </div>
                       </div>
@@ -785,8 +832,10 @@ const CoachDashboard = () => {
                   })}
                 </div>
 
+                {/* Updated Button Background to #1A9CFF */}
                 <Button
-                  className="w-full mt-4"
+                  className="w-full mt-4 text-white hover:opacity-90"
+                  style={{ backgroundColor: "#1A9CFF" }}
                   onClick={handleSubmitAttendance}
                   disabled={isSubmitting || assignedPlayers.length === 0}
                 >
@@ -794,6 +843,7 @@ const CoachDashboard = () => {
                 </Button>
               </CardContent>
             </Card>
+
             <Card className="shadow-card">
               <CardHeader>
                 <CardTitle>Calendar</CardTitle>
@@ -801,32 +851,36 @@ const CoachDashboard = () => {
                   Select date to view/mark attendance
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex justify-center">
                 <Calendar
                   mode="single"
                   selected={selectedDate}
                   onSelect={setSelectedDate}
-                  className="rounded-md border"
+                  className="rounded-md border p-3"
+                  // Style logic to apply the specific Blue color
+                  modifiersStyles={{
+                    selected: {
+                      backgroundColor: "#1A9CFF",
+                      color: "white",
+                      borderRadius: "50%", // Ensures it is a circle
+                    },
+                  }}
+                  // Tailwind logic to fix the box shape and selection circle
+                  classNames={{
+                    day_selected:
+                      "bg-[#1A9CFF] text-white hover:bg-[#1A9CFF] focus:bg-[#1A9CFF] rounded-full w-9 h-9 flex items-center justify-center p-0",
+                    day_today: "bg-accent text-accent-foreground rounded-full",
+                    day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100 hover:rounded-full",
+                  }}
                 />
               </CardContent>
             </Card>
           </div>
         </TabsContent>
       </Tabs>
+      <Footer />
     </div>
   );
 };
-
-const StatCard = ({ icon, label, value }) => (
-  <Card className="shadow-sm">
-    <CardContent className="p-4 flex items-center gap-3">
-      <div className="text-primary">{icon}</div>
-      <div>
-        <p className="text-2xl font-bold">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </div>
-    </CardContent>
-  </Card>
-);
 
 export default CoachDashboard;

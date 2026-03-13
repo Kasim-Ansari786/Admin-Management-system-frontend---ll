@@ -1,14 +1,12 @@
-// --- AddPlayers.jsx ---
-
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-// 💥 FIX 1: Import the new utility function for tenant ID
 import { getLoggedInUserId } from "@/contexts/AuthContext";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import Footer from "../../components/Footer";
 import { Label } from "@/components/ui/label";
+//import supabase from '../supabaseClient';
 import {
   Select,
   SelectContent,
@@ -17,24 +15,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Loader2,
   Save,
   ArrowLeft,
-  UserPlus,
   XCircle,
   LogOut,
-  Users,
-  AlertCircle,
-  DollarSign,
-  TrendingUp,
 } from "lucide-react";
 
 import { toast } from "sonner";
 import { AddNewPlayerDetails } from "../../../api";
 
-// 🚀 Token Retrieval Utility
 const getAuthToken = () => {
   return localStorage.getItem("authToken");
 };
@@ -50,20 +41,20 @@ const initialFormData = {
   phone_no: "",
   email_id: "",
   address: "",
+  pincode: "", 
+  area: "", // Ensure lowercase matches backend expectations
   emergency_contact_number: "",
   guardian_contact_number: "",
   guardian_email_id: "",
   medical_condition: "",
-  aadhar_upload_path: null,
+  aadhar_upload_path: null, 
+  aadhar_back_upload_path: null, 
   birth_certificate_path: null,
   profile_photo_path: null,
 };
 
-const bloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
-
 const calculateAge = (dateString) => {
   if (!dateString) return "";
-
   const birthDate = new Date(dateString);
   const today = new Date();
   if (isNaN(birthDate)) return "";
@@ -72,7 +63,6 @@ const calculateAge = (dateString) => {
   if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-
   return age >= 0 ? String(age) : "";
 };
 
@@ -86,22 +76,13 @@ const AddPlayerForm = () => {
     localStorage.removeItem("authToken");
     localStorage.removeItem("authUser");
     localStorage.removeItem("authSession");
-
-    toast.info("You have been signed out.", {
-      duration: 3000,
-      style: { backgroundColor: "#BBDEFB", color: "#1565C0" },
-    });
-
+    toast.info("You have been signed out.");
     navigate("/auth");
   };
 
   const handleChange = (e) => {
     const { id, value, type, checked, files } = e.target;
-    if (
-      id === "phone_no" ||
-      id === "emergency_contact_number" ||
-      id === "guardian_contact_number"
-    ) {
+    if (["phone_no", "emergency_contact_number", "guardian_contact_number"].includes(id)) {
       const numericValue = value.replace(/\D/g, "").slice(0, 10);
       setFormData((prev) => ({ ...prev, [id]: numericValue }));
       return;
@@ -120,8 +101,7 @@ const AddPlayerForm = () => {
     setFormData((prev) => {
       let newState = { ...prev, [id]: value };
       if (id === "date_of_birth") {
-        const age = calculateAge(value);
-        newState.age = age;
+        newState.age = calculateAge(value);
       }
       return newState;
     });
@@ -131,162 +111,40 @@ const AddPlayerForm = () => {
     setFormData(initialFormData);
     setFileInputKey(Date.now());
   }, []);
-
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    
     const token = getAuthToken();
-    // 💥 FIX 2: Retrieve the Tenant ID (Login User ID)
     const tenantId = getLoggedInUserId();
 
-    // 1. Client-Side Authentication/Tenant Check
-    if (!token) {
-      toast.error("Authentication token is missing. Redirecting to login...", {
-        duration: 5000,
-        style: {
-          backgroundColor: "#FFEBEE",
-          color: "#B71C1C",
-          borderColor: "#F44336",
-        },
-      });
-      setIsSubmitting(false);
-      navigate("/auth");
-      return;
-    }
-
-    if (!tenantId) {
-      toast.error("Tenant ID is missing. Please log out and log back in.", {
-        duration: 5000,
-        style: {
-          backgroundColor: "#FFEBEE",
-          color: "#B71C1C",
-          borderColor: "#F44336",
-        },
-      });
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (
-      formData.phone_no.length !== 10 ||
-      formData.emergency_contact_number.length !== 10
-    ) {
-      toast.error(
-        "Phone Number and Emergency Contact No. must be exactly 10 digits.",
-        {
-          duration: 5000,
-          style: {
-            backgroundColor: "#FFEBEE",
-            color: "#B71C1C",
-            borderColor: "#F44336",
-          },
-        }
-      );
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Basic required fields check (assuming Category and Name are required)
-    if (!formData.name || !formData.date_of_birth) {
-      toast.error(
-        "Missing required player details (Name, DOB, Category, Center Name).",
-        {
-          duration: 5000,
-          style: {
-            backgroundColor: "#FFEBEE",
-            color: "#B71C1C",
-            borderColor: "#F44336",
-          },
-        }
-      );
-      setIsSubmitting(false);
-      return;
-    }
-
-    const formDataToSend = new FormData();
-    Object.keys(formData).forEach((key) => {
-      const value = formData[key];
-
-      if (value instanceof File) {
-        formDataToSend.append(key, value, value.name);
-      } else if (value !== null && value !== undefined) {
-        formDataToSend.append(key, String(value));
-      }
-    });
-
-    // 💥 FIX 3: Append the tenant_id before sending the data
-    formDataToSend.append("tenant_id", tenantId);
-
     try {
-      // 💥 FIX 4: Pass the token to the API function (as required by your previous API check)
-      const response = await AddNewPlayerDetails(formDataToSend, token);
-
-      toast.success(`Player added successfully! ${response.message || ""}`, {
-        duration: 5000,
-        style: {
-          backgroundColor: "#E8F5E9",
-          color: "#1B5E20",
-          borderColor: "#4CAF50",
-        },
+      const dataToSend = new FormData();
+      Object.keys(formData).forEach((key) => {
+        if (formData[key] !== null && formData[key] !== undefined) {
+            dataToSend.append(key, formData[key]);
+        }
       });
-      resetForm();
-      setTimeout(() => {
-        navigate("/staff?tab=players");
-      }, 100);
+      dataToSend.append("tenant_id", tenantId);
+      await AddNewPlayerDetails(dataToSend, token);      
+      toast.success("Player added successfully!");
+      navigate("/staff?tab=players");
     } catch (error) {
       console.error("Submission failed", error);
-      let errorMessage =
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to add player. Check console for details.";
-
-      // 2. Server-Side Authentication Check (If token is invalid or expired)
-      if (
-        error.response &&
-        (error.response.status === 401 || error.response.status === 403)
-      ) {
-        errorMessage = "Session expired or unauthorized. Redirecting to login.";
-
-        // Clear bad token and redirect
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("authUser");
-        localStorage.removeItem("authSession");
-        navigate("/auth");
-      } else if (errorMessage.includes("Network Error")) {
-        errorMessage =
-          "Could not connect to the server. Please ensure the backend is running and the API_URL is correct.";
-      } else if (errorMessage.includes('null value in column "tenant_id"')) {
-        errorMessage =
-          "Critical Error: Failed to link player to your account. Please log out and log back in, then try again.";
-      }
-
-      toast.error(errorMessage, {
-        duration: 10000,
-        style: {
-          backgroundColor: "#FFEBEE",
-          color: "#B71C1C",
-          borderColor: "#F44336",
-        },
-      });
+      toast.error(error.response?.data?.error || "Submission failed");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+
+
   const handleCancel = () => {
     resetForm();
-    navigate("/staff?tab=players");
+    toast.info("Form cleared");
   };
 
-  const renderInputField = (
-    id,
-    label,
-    type = "text",
-    placeholder = "",
-    maxLength = null,
-    disabled = false
-  ) => {
+  const renderInputField = (id, label, type = "text", placeholder = "", maxLength = null, disabled = false) => {
     const isDateOfBirth = id === "date_of_birth";
     return (
       <div className="space-y-2">
@@ -296,270 +154,131 @@ const AddPlayerForm = () => {
           type={type}
           placeholder={placeholder}
           value={formData[id] || ""}
-          onChange={
-            isDateOfBirth
-              ? (e) => handleSelectChange(id, e.target.value)
-              : handleChange
-          }
+          onChange={isDateOfBirth ? (e) => handleSelectChange(id, e.target.value) : handleChange}
           maxLength={maxLength}
           disabled={disabled}
-          // Set required fields based on database constraints
-          required={
-            id === "name" ||
-            id === "date_of_birth" ||
-            id === "phone_no" ||
-            id === "emergency_contact_number" ||
-            id === "address"
-          }
+          required={["name", "date_of_birth", "phone_no", "emergency_contact_number", "address", "area", "pincode"].includes(id)}
         />
       </div>
     );
   };
 
+
   const renderFileInput = (id, label) => (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        key={id + fileInputKey}
-        id={id}
-        type="file"
-        onChange={handleChange}
-        className="block w-full text-sm text-gray-500
-                   file:mr-4 file:py-2 file:px-4
-                   file:rounded-md file:border-0
-                   file:text-sm file:font-semibold
-                   file:bg-primary file:text-primary-foreground
-                   hover:file:bg-primary/90"
-      />
-      {formData[id] && formData[id] instanceof File ? (
-        <p className="text-xs text-muted-foreground mt-1 text-center font-medium text-green-600">
-          Selected File: {formData[id].name}
-        </p>
-      ) : (
-        <p className="text-xs text-muted-foreground mt-1 text-center">
-          No file selected.
-        </p>
-      )}
+    <div className="flex flex-col items-center gap-3">
+      <label className="text-sm font-semibold text-slate-700">{label}</label>
+      <div className="w-full max-w-[230px] border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center hover:border-[#1A9CFF] transition-all">
+        <input
+          key={fileInputKey}
+          id={id}
+          type="file"
+          onChange={handleChange}
+          className="block w-full file:mr-2 file:px-4 file:py-2 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#1A9CFF] file:text-white hover:file:bg-[#1582d8] cursor-pointer text-center"
+        />
+      </div>
     </div>
   );
 
-  return (
-    <div className="space-y-8 max-w-8xl mx-auto ">
-      <div className="gradient-header w-full flex items-center justify-between gap-6 p-6 shadow-lg shadow-glow animate-fade-in rounded-xl">
-        {/* Left Section: Back Button and Title */}
-        <div className="flex items-center gap-4">
-          <Button
-            variant="secondary"
-            className="text-primary hover:bg-white/90"
-            onClick={() => navigate(-1)}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
+  const primaryColor = "#1A9CFF";
 
+  return (
+    <div className="space-y-6 pb-10">
+      <div className="w-full flex items-center justify-between gap-6 p-6 rounded-xl shadow-lg" style={{ background: `linear-gradient(135deg, ${primaryColor} 0%, #0076D1 100%)` }}>
+        <div className="flex items-center gap-4">
+          <Button variant="secondary" className="bg-white text-[#1A9CFF]" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-4 w-4 mr-2" /> Back
+          </Button>
           <div className="space-y-1">
-            <h1 className="text-primary-foreground font-extrabold text-2xl">
-              Add Administration
-            </h1>
-            <p className="text-primary-foreground/80 text-sm">
-              Complete management and oversight
-            </p>
+            <h1 className="text-white font-extrabold text-2xl">Add New player</h1>
+            <p className="text-white/80 text-sm">Create a new player profile</p>
           </div>
         </div>
-
-        {/* Right Section: Sign Out Button */}
-        <Button
-          variant="secondary"
-          className="bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground"
-          onClick={handleSignOut}
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Sign Out
+        <Button variant="secondary" className="bg-white/10 text-white" onClick={handleSignOut}>
+          <LogOut className="h-4 w-4 mr-2" /> Sign Out
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4"></div>
-
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-          </CardHeader>
+        <Card className="shadow-md border-t-4" style={{ borderTopColor: primaryColor }}>
+          <CardHeader><CardTitle>Personal Information</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {renderInputField(
-              "name",
-              "Full Name *",
-              "text",
-              "E.g., Michael Jordan"
-            )}
-
+            {renderInputField("name", "Full Name *")}
             {renderInputField("date_of_birth", "Date of Birth *", "date")}
-
-            {renderInputField(
-              "age",
-              "Age (Auto-Calculated)",
-              "number",
-              "e.g., 10",
-              null,
-              true
-            )}
-
-            {renderInputField(
-              "phone_no",
-              "Phone Number *",
-              "tel",
-              "10-digit mobile number",
-              10
-            )}
-
-            {renderInputField(
-              "email_id",
-              "Email ID",
-              "email",
-              "E.g., player@example.com"
-            )}
-
+            {renderInputField("age", "Age", "number", "", null, true)}
+            {renderInputField("phone_no", "Phone Number *", "tel", "10-digit", 10)}
+            {renderInputField("email_id", "Email ID", "email")}
+            
             <div className="space-y-2">
-              <Label htmlFor="gender">Gender *</Label>
-              <Select
-                id="gender"
-                value={formData.gender}
-                onValueChange={(v) => handleSelectChange("gender", v)}
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Gender" />
-                </SelectTrigger>
+              <Label>Gender *</Label>
+              <Select onValueChange={(v) => handleSelectChange("gender", v)}>
+                <SelectTrigger><SelectValue placeholder="Select Gender" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Male">Male</SelectItem>
                   <SelectItem value="Female">Female</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="blood_group">Blood Group *</Label>
-              <Select
-                id="blood_group"
-                value={formData.blood_group}
-                onValueChange={(v) => handleSelectChange("blood_group", v)}
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Blood Group" />
-                </SelectTrigger>
+              <Label>Blood Group *</Label>
+              <Select onValueChange={(v) => handleSelectChange("blood_group", v)}>
+                <SelectTrigger><SelectValue placeholder="Select Blood Group" /></SelectTrigger>
                 <SelectContent>
-                  {bloodGroups.map((group) => (
-                    <SelectItem key={group} value={group}>
-                      {group}
-                    </SelectItem>
-                  ))}
+                  {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
+           
+            {renderInputField("area", "Area *", "text", "Area Name")}
+            {renderInputField("pincode", "Pin-code *", "text", "6-digit", 6)}
             <div className="md:col-span-3 space-y-2">
-              <Label htmlFor="address">Address *</Label>
-              <Textarea
-                id="address"
-                placeholder="Player's full address"
-                value={formData.address}
-                onChange={handleChange}
-                required
-              />
+              <Label htmlFor="address">Full Address *</Label>
+              <Textarea id="address" value={formData.address} onChange={handleChange} required />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>Guardian, Emergency Contact & Medical</CardTitle>
-          </CardHeader>
+        <Card className="shadow-md">
+          <CardHeader><CardTitle>Guardian & Medical</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {renderInputField(
-              "father_name",
-              "Father's Name",
-              "text",
-              "E.g., John Smith"
-            )}
-            {renderInputField(
-              "mother_name",
-              "Mother's Name",
-              "text",
-              "E.g., Jane Smith"
-            )}
-
-            {renderInputField(
-              "emergency_contact_number",
-              "Emergency Contact No. *",
-              "tel",
-              "10-digit emergency number",
-              10
-            )}
-            {renderInputField(
-              "guardian_contact_number",
-              "Guardian Contact No.",
-              "tel",
-              "Optional 10-digit number",
-              10
-            )}
-
-            {renderInputField(
-              "guardian_email_id",
-              "Guardian Email ID",
-              "email",
-              "E.g., guardian@email.com"
-            )}
-
-            <div className="md:col-span-3 space-y-2">
+            {renderInputField("father_name", "Father's Name")}
+            {renderInputField("mother_name", "Mother's Name")}
+            {renderInputField("emergency_contact_number", "Emergency Contact *", "tel", "", 10)}
+            {renderInputField("guardian_contact_number", "Guardian Contact", "tel", "", 10)}
+            {renderInputField("guardian_email_id", "Guardian Email/User ID *", "email",)}
+            <div className="md:col-span-1 space-y-2">
               <Label htmlFor="medical_condition">Medical Condition/Notes</Label>
               <Textarea
                 id="medical_condition"
-                placeholder="Any allergies, chronic conditions, or special notes..."
                 value={formData.medical_condition}
                 onChange={handleChange}
+                placeholder="Any allergies or special notes..."
               />
             </div>
           </CardContent>
         </Card>
 
-        <div className="p-6">
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle>Document Uploads</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {renderFileInput("profile_photo_path", "Player Profile Photo")}
-              {renderFileInput("aadhar_upload_path", "Aadhar Card Upload")}
-              {renderFileInput(
-                "birth_certificate_path",
-                "Birth Certificate Upload"
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="shadow-md border-t-2" style={{ borderTopColor: primaryColor }}>
+          <CardHeader><CardTitle style={{ color: primaryColor }}>Document Uploads</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {renderFileInput("profile_photo_path", "Profile Photo")}
+            {renderFileInput("aadhar_upload_path", "Aadhar Front")}
+            {renderFileInput("aadhar_back_upload_path", "Aadhar Back")}
+            {renderFileInput("birth_certificate_path", "Birth Certificate")}
+          </CardContent>
+        </Card>
 
         <div className="flex justify-end space-x-4 pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-          >
-            <XCircle className="h-4 w-4 mr-2" />
-            Cancel & Clear
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            {isSubmitting ? "Saving Player..." : "Save Player"}
+          <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button type="submit" disabled={isSubmitting} style={{ backgroundColor: primaryColor }} className="text-white">
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save Player
           </Button>
         </div>
       </form>
+       <div className="flex flex-col overflow-hidden bg-gray-50">
+        <Footer />
+      </div>
     </div>
   );
 };

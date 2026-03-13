@@ -27,6 +27,7 @@ export const StatCard = ({
   trend,
   variant = "default",
   className,
+  iconColor,
 }) => {
   return (
     <div
@@ -79,7 +80,7 @@ export const StatCard = ({
             iconVariantStyles[variant]
           )}
         >
-          <Icon className="h-6 w-6" />
+          <Icon className="h-6 w-6" style={iconColor ? { color: iconColor } : undefined} />
         </div>
       </div>
     </div>

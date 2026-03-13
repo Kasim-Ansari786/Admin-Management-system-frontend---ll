@@ -499,57 +499,32 @@ const PendingRegistrations = () => {
   };
 
   const handleDownload = () => {
-    if (!registrations || registrations.length === 0) {
-      toast({
-        title: "No Data to Export",
-        description: "The registration list is currently empty.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Header row (A1)
     const headers = [
-      "Name",
-      "Phone Number",
-      "Email ID",
-      "Address",
-      "Age",
-      "Application Date",
-      "Parent Name",
+      [
+        "Name",
+        "Phone Number",
+        "Email ID",
+        "Address",
+        "Age",
+        "Application Date",
+        "Parent Name",
+      ],
     ];
 
-    // Data rows (start from A2)
-    const dataToExport = registrations.map((reg, index) => ({
-      Name: reg.name || "",
-      "Phone Number": reg.phoneNumber || "",
-      "Email ID": reg.email || "",
-      Address: reg.address || "",
-      Age: reg.age || "",
-      "Application Date": reg.applicationDate || "",
-      "Parent Name": reg.parentName || "",
-    }));
-
     try {
-      const ws = XLSX.utils.aoa_to_sheet([headers]);
-      XLSX.utils.sheet_add_json(ws, dataToExport, {
-        origin: -1, // ✅ APPEND MODE (KEY FIX)
-        skipHeader: true, // ✅ Prevent duplicate headers
-      });
+      const ws = XLSX.utils.aoa_to_sheet(headers);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Registrations");
-
-      XLSX.writeFile(wb, "Registrations_Data_Export.xlsx");
-
+      XLSX.utils.book_append_sheet(wb, ws, "Template");
+      XLSX.writeFile(wb, "Sample_Registration_Template.xlsx");
       toast({
-        title: "Download Complete",
-        description: "The registration data has been downloaded successfully.",
+        title: "Sample Downloaded",
+        description: "The template has been downloaded successfully.",
       });
     } catch (error) {
       console.error("Excel Export Error:", error);
       toast({
         title: "Download Failed",
-        description: "There was an error exporting the data to Excel.",
+        description: "Could not generate the sample file.",
         variant: "destructive",
       });
     }
@@ -606,6 +581,7 @@ const PendingRegistrations = () => {
             variant="default"
             onClick={handleExport}
             disabled={registrations.length === 0 || isLoading}
+            className="bg-[#1A9CFF] hover:bg-[#0084E6] text-white border-none shadow-md transition-all active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             <Download className="h-4 w-4 mr-2" />
             Download Excel
@@ -615,7 +591,7 @@ const PendingRegistrations = () => {
             variant="secondary"
             onClick={handleDownload}
             className="flex items-center gap-2"
-            disabled={registrations.length === 0 || isLoading}
+            disabled={isLoading} // Removed registrations.length check
           >
             <Download className="h-4 w-4" />
             Sample Excel
@@ -667,8 +643,6 @@ const PendingRegistrations = () => {
                       <TableCell>{reg.age}</TableCell>
                       <TableCell>{reg.applicationDate}</TableCell>
                       <TableCell>{reg.parentName}</TableCell>
-
-                      {/* START OF FIX: Ensure Pending status gets yellow badge styling */}
                       <TableCell>
                         <span
                           className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -682,8 +656,6 @@ const PendingRegistrations = () => {
                           {reg.Status || "Pending"}
                         </span>
                       </TableCell>
-                      {/* END OF FIX */}
-
                       <TableCell className="text-right">
                         <Button
                           variant="outline"

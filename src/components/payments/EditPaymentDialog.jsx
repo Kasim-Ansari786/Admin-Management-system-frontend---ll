@@ -18,9 +18,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react"; 
+import { Loader2 } from "lucide-react";
 
-import { updatePayment, getPaymentDetailsupdated } from "../../../api"; 
+import { updatePayment, getPaymentDetailsupdated } from "../../../api";
 
 const formatDateForInput = (dateString) => {
   if (!dateString) return "";
@@ -29,38 +29,43 @@ const formatDateForInput = (dateString) => {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return "";
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   } catch (e) {
     return "";
   }
 };
 
-export default function EditPaymentDialog({ record, open, onOpenChange, onSave }) {
+export default function EditPaymentDialog({
+  record,
+  open,
+  onOpenChange,
+  onSave,
+}) {
   const [formData, setFormData] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false); 
-  const [isLoading, setIsLoading] = useState(false); 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const idToFetch = record?.id || record?.payment_id || record?._id;
 
     if (open && idToFetch) {
-      setFormData(null); 
+      setFormData(null);
       setIsLoading(true);
 
       async function fetchData() {
         try {
-          const fullRecord = await getPaymentDetailsupdated(idToFetch); 
+          const fullRecord = await getPaymentDetailsupdated(idToFetch);
           setFormData({
             ...fullRecord,
-            id: idToFetch, 
-            full_name: fullRecord.full_name || '',
-            email: fullRecord.email || '',
-            phone: fullRecord.phone || '',
+            id: idToFetch,
+            full_name: fullRecord.full_name || "",
+            email: fullRecord.email || "",
+            phone: fullRecord.phone || "",
             amount_paid: fullRecord.amount_paid || 0,
-            payment_method: fullRecord.payment_method || '', // Map DB field to state
-            status: fullRecord.status || '',
+            payment_method: fullRecord.payment_method || "", // Map DB field to state
+            status: fullRecord.status || "",
             hire_date: formatDateForInput(fullRecord.hire_date),
             end_date: formatDateForInput(fullRecord.end_date),
           });
@@ -70,25 +75,28 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
             description: "Could not fetch record data.",
             variant: "destructive",
           });
-          onOpenChange(false); 
+          onOpenChange(false);
         } finally {
           setIsLoading(false);
         }
       }
       fetchData();
     }
-  }, [open, record, onOpenChange]); 
+  }, [open, record, onOpenChange]);
 
-  const handleSubmit = async (e) => { 
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const idToUpdate = formData.id || formData.payment_id; 
+    const idToUpdate = formData.id || formData.payment_id;
     if (!formData || isSubmitting || !idToUpdate) return;
-    
+
     setIsSubmitting(true);
     try {
       const updatedRecord = await updatePayment(idToUpdate, formData);
       onSave(updatedRecord);
-      toast({ title: "Record Updated", description: "Successfully saved changes." });
+      toast({
+        title: "Record Updated",
+        description: "Successfully saved changes.",
+      });
       onOpenChange(false);
     } catch (error) {
       toast({
@@ -103,7 +111,7 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
 
   if (isLoading || !formData) {
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Loading</DialogTitle>
@@ -114,7 +122,7 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
             <p className="text-gray-500">Retrieving details...</p>
           </div>
         </DialogContent>
-        </Dialog>
+      </Dialog>
     );
   }
 
@@ -134,8 +142,10 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
               <div className="space-y-2">
                 <Label>Name</Label>
                 <Input
-                  value={formData.full_name} 
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                  value={formData.full_name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, full_name: e.target.value })
+                  }
                   required
                 />
               </div>
@@ -144,7 +154,9 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
                 <Input
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
                   required
                 />
               </div>
@@ -155,7 +167,9 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
                 <Label>Phone</Label>
                 <Input
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, phone: e.target.value })
+                  }
                   required
                 />
               </div>
@@ -163,8 +177,13 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
                 <Label>Amount (₹)</Label>
                 <Input
                   type="number"
-                  value={formData.amount_paid} 
-                  onChange={(e) => setFormData({ ...formData, amount_paid: Number(e.target.value) })}
+                  value={formData.amount_paid}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      amount_paid: Number(e.target.value),
+                    })
+                  }
                   required
                 />
               </div>
@@ -175,8 +194,10 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
                 <Label>Start Date</Label>
                 <Input
                   type="date"
-                  value={formData.hire_date} 
-                  onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+                  value={formData.hire_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, hire_date: e.target.value })
+                  }
                   required
                 />
               </div>
@@ -185,7 +206,9 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
                 <Input
                   type="date"
                   value={formData.end_date}
-                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, end_date: e.target.value })
+                  }
                   required
                 />
               </div>
@@ -196,9 +219,13 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
                 <Label>Payment Method</Label>
                 <Select
                   value={formData.payment_method}
-                  onValueChange={(val) => setFormData({ ...formData, payment_method: val })}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, payment_method: val })
+                  }
                 >
-                  <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select method" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="razorpay">Razorpay (Online)</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
@@ -212,9 +239,13 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
                 <Label>Status</Label>
                 <Select
                   value={formData.status}
-                  onValueChange={(val) => setFormData({ ...formData, status: val })}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, status: val })
+                  }
                 >
-                  <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="paid">Paid</SelectItem>
@@ -226,11 +257,26 @@ export default function EditPaymentDialog({ record, open, onOpenChange, onSave }
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save Changes"}
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="bg-[#1A9CFF] hover:bg-[#1A9CFF]/90 text-white shadow-lg shadow-[#1A9CFF]/20 transition-all active:scale-95 disabled:bg-gray-400 disabled:cursor-not-allowed px-8"
+            >
+              {isSubmitting ? (
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  <span>Saving...</span>
+                </div>
+              ) : (
+                "Save Changes"
+              )}
             </Button>
           </DialogFooter>
         </form>

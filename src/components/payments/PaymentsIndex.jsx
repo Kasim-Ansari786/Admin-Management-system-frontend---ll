@@ -11,6 +11,16 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+import {
   Table,
   TableBody,
   TableCell,
@@ -62,6 +72,9 @@ const isPaymentOverdue = (endDateString) => {
   return endDate < today;
 };
 
+const formatCurrency = (value) =>
+  `₹${new Intl.NumberFormat("en-IN").format(value)}`;
+
 const formatDate = (dateString) => {
   if (!dateString) return "N/A";
   // Convert date string to a Date object first, in case it's in a non-standard format
@@ -75,6 +88,9 @@ const formatDate = (dateString) => {
     day: "numeric",
   });
 };
+
+// Brand color used across the payments UI (fallback to a sensible blue)
+const BRAND_BLUE = "#3b82f6";
 
 const getStatusBadge = (record) => {
   const isOverdue =
@@ -320,76 +336,88 @@ export default function Index() {
     <div className="space-y-0">
       <main className="space-y-0">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card className="shadow-card">
+          <Card className="shadow-sm border-none">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
                     Total Collected
                   </p>
-                  <p className="text-2xl font-bold text-success">
+                  <p className="text-2xl font-bold text-emerald-600">
                     ₹ {totalCollected}
                   </p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-success/10 flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-success" />
+                <div className="h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center">
+                  <TrendingUp className="h-6 w-6 text-emerald-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Card 2: Pending */}
-          <Card className="shadow-card">
+          <Card className="shadow-sm border-none">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Pending</p>
-                  <p className="text-2xl font-bold text-warning">
+                  <p className="text-2xl font-bold text-amber-500">
                     ₹ {totalPending}
                   </p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-warning/10 flex items-center justify-center">
-                  <AlertCircle className="h-6 w-6 text-warning" />
+                <div className="h-12 w-12 rounded-full bg-amber-50 flex items-center justify-center">
+                  <AlertCircle className="h-6 w-6 text-amber-500" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Card 3: Total Tenants */}
-          <Card className="shadow-card">
+          <Card className="shadow-sm border-none">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Tenants</p>
-                  <p className="text-2xl font-bold">
+                  <div className="text-2xl font-bold">
                     {isLoading ? (
-                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <Loader2
+                        className="h-6 w-6 animate-spin"
+                        style={{ color: BRAND_BLUE }}
+                      />
                     ) : (
                       records.length
                     )}
-                  </p>
+                  </div>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Users className="h-6 w-6 text-primary" />
+                <div
+                  className="h-12 w-12 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: `${BRAND_BLUE}15` }}
+                >
+                  <Users className="h-6 w-6" style={{ color: BRAND_BLUE }} />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Card 4: Collection Rate */}
-          <Card className="shadow-card">
+          <Card className="shadow-sm border-none">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
                     Collection Rate
                   </p>
-                  <p className="text-2xl font-bold text-primary">
+                  <p
+                    className="text-2xl font-bold"
+                    style={{ color: BRAND_BLUE }}
+                  >
                     {collectionRate}%
                   </p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <CreditCard className="h-6 w-6 text-primary" />
+                <div
+                  className="h-12 w-12 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: `${BRAND_BLUE}15` }}
+                >
+                  <CreditCard
+                    className="h-6 w-6"
+                    style={{ color: BRAND_BLUE }}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -415,38 +443,74 @@ export default function Index() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
+                  <div className="h-[300px] w-full">
                     {overviewData.length === 0 ? (
-                      <div className="text-center py-4 text-muted-foreground">
+                      <div className="flex h-full items-center justify-center text-muted-foreground">
                         No payment overview data available.
                       </div>
                     ) : (
-                      overviewData.map((payment, index) => (
-                        <div key={index} className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="font-medium">
-                              {payment.payment_date}
-                            </span>
-                            <span className="font-semibold">
-                              ₹{payment.total.toLocaleString("en-IN")}
-                            </span>
-                          </div>
-                          <Progress
-                            value={(payment.collected / payment.total) * 100}
-                            className="h-2"
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={overviewData}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                          /* gap between groups of bars */
+                          barGap={8}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                            stroke="#f0f0f0"
                           />
-                          <div className="flex justify-between text-xs text-muted-foreground">
-                            <span className="text-success">
-                              Collected: ₹
-                              {payment.totalCollected.toLocaleString("en-IN")}
-                            </span>
-                            <span className="text-warning">
-                              Pending: ₹
-                              {payment.totalPending.toLocaleString("en-IN")}
-                            </span>
-                          </div>
-                        </div>
-                      ))
+                          <XAxis
+                            dataKey="payment_date"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: "#94a3b8", fontSize: 12 }}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: "#94a3b8", fontSize: 12 }}
+                            /* Adjust scale as per your image (0, 30, 60, 90, 120) */
+                            domain={[0, "auto"]}
+                          />
+                          <Tooltip
+                            cursor={{ fill: "#f8fafc" }}
+                            formatter={(value) => [
+                              `₹${value.toLocaleString("en-IN")}`,
+                            ]}
+                            contentStyle={{
+                              borderRadius: "8px",
+                              border: "none",
+                              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                            }}
+                          />
+                          <Legend
+                            verticalAlign="top"
+                            align="right"
+                            iconType="circle"
+                            wrapperStyle={{ paddingBottom: "20px" }}
+                          />
+
+                          {/* Collected Bar (Blue color from your image) */}
+                          <Bar
+                            dataKey="totalCollected"
+                            name="Collected"
+                            fill="#3b82f6"
+                            radius={[6, 6, 0, 0]}
+                            barSize={20}
+                          />
+
+                          {/* Pending Bar (Coral/Red color from your image) */}
+                          <Bar
+                            dataKey="totalPending"
+                            name="Pending"
+                            fill="#e57373"
+                            radius={[6, 6, 0, 0]}
+                            barSize={20}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
                     )}
                   </div>
                 </CardContent>
@@ -466,7 +530,7 @@ export default function Index() {
                 <CardContent>
                   <div className="space-y-3">
                     <Button
-                      className="w-full justify-start"
+                      className="w-full justify-start bg-[#1A9CFF] hover:bg-[#1582d8] text-white border-none shadow-sm transition-all flex items-center gap-2 active:scale-95 focus-visible:ring-[#1A9CFF]"
                       onClick={() => setRemindersOpen(true)}
                     >
                       <IndianRupee className="h-5 w-5 text-white mt-0.5" />
@@ -504,8 +568,8 @@ export default function Index() {
                   </CardTitle>
                   <Button
                     onClick={() => setAddRecordOpen(true)}
-                    className="flex items-center gap-2"
                     size="sm"
+                    className="bg-[#1A9CFF] hover:bg-[#1582d8] text-white border-none shadow-sm transition-all flex items-center gap-2 active:scale-95 focus-visible:ring-[#1A9CFF]"
                   >
                     <PlusCircle className="h-4 w-4" />
                     Add New Record
@@ -672,7 +736,7 @@ export default function Index() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleEdit(record)}
-                                    className="h-8 w-8 p-0 text-primary hover:bg-primary/10"
+                                    className="h-8 w-8 p-0 text-[#1A9CFF] hover:text-[#1A9CFF] hover:bg-[#1A9CFF]/10 transition-colors duration-200"
                                   >
                                     <Pencil className="h-4 w-4" />
                                   </Button>

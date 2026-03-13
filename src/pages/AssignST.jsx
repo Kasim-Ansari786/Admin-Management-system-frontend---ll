@@ -29,9 +29,7 @@ import {
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-import { Users, UserPlus, UserCheck, UserX, Check } from "lucide-react";
-// Assuming these are imports from a file that contains the API calls
+import { Users, UserPlus, UserCheck, UserX, Check, Search, Filter, CheckCircle2, HelpCircle } from "lucide-react";
 import {
   GetagssignDetails,
   GetCoachDetailslist,
@@ -66,26 +64,25 @@ const initialVenueForm = {
 const VENUES_PER_PAGE = 5;
 
 export default function StaffDashboard() {
-  const { toast = console.log } = useToast(); // Added fallback for toast
+  const { toast = console.log } = useToast();
   const [venues, setVenues] = useState([]);
   const [showVenueForm, setShowVenueForm] = useState(false);
   const [venueForm, setVenueForm] = useState(initialVenueForm);
   const [players, setPlayers] = useState([]);
   const [coaches, setCoaches] = useState([]);
-  // `Select` expects a scalar value (string/null) when `multiple` is false.
   const [selectedCoachId, setSelectedCoachId] = useState("");
   const [selectedPlayers, setSelectedPlayers] = useState([]);
-  const [selectedCoach, setSelectedCoach] = useState(null);
+  const [selectedCoach, setSelectedCoach] = useState("all");
   const [isPlayerPopoverOpen, setIsPlayerPopoverOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchTermVenue, setSearchTermVenue] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterStatus, setFilterStatus] = useState("all");
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const playersData = await GetagssignDetails();
-        // Use playersData.data which contains the array of players
         setPlayers(playersData?.data || []);
       } catch (error) {
         console.error("Failed to load players data:", error);
@@ -100,7 +97,6 @@ export default function StaffDashboard() {
         const coachData = await GetCoachDetailslist();
         let fetchedCoaches = [];
         if (coachData) {
-          // Coach API returns data: { status: "success", count: ..., data: [...] }
           fetchedCoaches = coachData.data;
           if (!fetchedCoaches && Array.isArray(coachData)) {
             fetchedCoaches = coachData;
@@ -110,12 +106,11 @@ export default function StaffDashboard() {
       } catch (error) {
         console.error(
           "Failed to load coaches data (Possible 404 on API):",
-          error
+          error,
         );
         toast({
           title: "Coach Data Load Error",
-          description:
-            "Failed to load coach data from API. Please check the API endpoint.",
+          description: "Failed to load coach data from API.",
           variant: "destructive",
         });
         setCoaches([]);
@@ -124,309 +119,23 @@ export default function StaffDashboard() {
     fetchData();
   }, []);
 
-  // --- Venue Management Logic (Omitted for brevity, assumed correct) ---
+  // Helper function to find coach name by ID from the coaches list
+  const getCoachNameById = (coachId) => {
+    if (!coachId) return null;
+    const coach = coaches.find((c) => String(c.coach_id) === String(coachId));
+    return coach ? coach.coach_name : null;
+  };
+
   const handleDayStatusChange = (dayIndex, status) => {
     setVenueForm((prev) => {
       const newOperatingHours = [...prev.operatingHours];
       newOperatingHours[dayIndex].status = status;
-
-      if (status === "Closed") {
-        newOperatingHours[dayIndex].slots = [];
-      } else if (
-        status === "Open Day" &&
-        newOperatingHours[dayIndex].slots.length === 0
-      ) {
-        newOperatingHours[dayIndex].slots.push({ ...initialTimeSlot });
-      }
-
       return { ...prev, operatingHours: newOperatingHours };
     });
   };
 
-  const handleAddTimeSlot = (dayIndex) => {
-    setVenueForm((prev) => {
-      const newOperatingHours = [...prev.operatingHours];
-      if (newOperatingHours[dayIndex].status === "Enter Hours") {
-        newOperatingHours[dayIndex].status = "Open Day";
-      }
-      newOperatingHours[dayIndex].slots.push({ ...initialTimeSlot });
-      return { ...prev, operatingHours: newOperatingHours };
-    });
-  };
-
-  const handleRemoveTimeSlot = (dayIndex, slotIndex) => {
-    setVenueForm((prev) => {
-      const newOperatingHours = [...prev.operatingHours];
-      newOperatingHours[dayIndex].slots = newOperatingHours[
-        dayIndex
-      ].slots.filter((_, i) => i !== slotIndex);
-
-      if (newOperatingHours[dayIndex].slots.length === 0) {
-        newOperatingHours[dayIndex].status = "Closed";
-      }
-
-      return { ...prev, operatingHours: newOperatingHours };
-    });
-  };
-
-  const handleTimeSlotChange = (dayIndex, slotIndex, field, value) => {
-    setVenueForm((prev) => {
-      const newOperatingHours = [...prev.operatingHours];
-      if (newOperatingHours[dayIndex].slots[slotIndex]) {
-        if (newOperatingHours[dayIndex].status === "Enter Hours") {
-          newOperatingHours[dayIndex].status = "Open Day";
-        }
-        newOperatingHours[dayIndex].slots[slotIndex][field] = value;
-      }
-      return { ...prev, operatingHours: newOperatingHours };
-    });
-  };
-
-  const handleSubmitVenue = async (e) => {
-    e.preventDefault();
-    if (
-      !venueForm.name ||
-      !venueForm.centerHead ||
-      !venueForm.address ||
-      !venueForm.googleMapsUrl
-    ) {
-      toast({
-        title: "Validation Error",
-        description:
-          "Please fill in all required fields (Name, Head, Address, Google Maps URL).",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    let hasValidSlots = false;
-    let hasIncompleteSlot = false;
-    let hasOpenDayWithNoSlots = false;
-    const submissionSlots = [];
-
-    venueForm.operatingHours.forEach((dayEntry) => {
-      const isDayOpenStatus =
-        dayEntry.status === "Open Day" || dayEntry.status === "Enter Hours";
-
-      if (isDayOpenStatus) {
-        if (dayEntry.slots.length === 0) {
-          hasOpenDayWithNoSlots = true;
-        }
-
-        dayEntry.slots.forEach((slot) => {
-          if (
-            (slot.startTime && !slot.endTime) ||
-            (!slot.startTime && slot.endTime)
-          ) {
-            hasIncompleteSlot = true;
-          }
-          if (slot.startTime && slot.endTime) {
-            hasValidSlots = true;
-            submissionSlots.push({
-              day: dayEntry.day,
-              startTime: slot.startTime,
-              endTime: slot.endTime,
-            });
-          }
-        });
-      }
-    });
-
-    if (hasIncompleteSlot) {
-      toast({
-        title: "Validation Error",
-        description:
-          "All time slots must have both a start time and an end time.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (
-      hasOpenDayWithNoSlots &&
-      venueForm.operatingHours.some((d) => d.status === "Open Day")
-    ) {
-      toast({
-        title: "Validation Error",
-        description: "An 'Open Day' must have at least one valid time slot.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (submissionSlots.length === 0) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter at least one valid time slot for the venue.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const dataToSubmit = {
-        name: venueForm.name,
-        centerHead: venueForm.centerHead,
-        address: venueForm.address,
-        googleUrl: venueForm.googleMapsUrl,
-        timeSlots: submissionSlots,
-      };
-
-      // Assume API call here (e.g., const apiResponse = await AddVenue(dataToSubmit);)
-      // Since AddVenue is not provided, we mock apiResponse for successful state update
-      const apiResponse = { venue_id: Date.now() };
-
-      const newVenue = {
-        id: apiResponse.venue_id?.toString() || Date.now().toString(),
-        name: venueForm.name,
-        centerHead: venueForm.centerHead,
-        address: venueForm.address,
-        googleMapsUrl: venueForm.googleMapsUrl,
-        operatingHours: submissionSlots,
-      };
-
-      setVenues((prevVenues) => [...prevVenues, newVenue]);
-      toast({
-        title: "Success",
-        description: "Venue added successfully.",
-      });
-
-      setVenueForm(initialVenueForm);
-      setShowVenueForm(false);
-      setCurrentPage(1);
-      setSearchTermVenue("");
-    } catch (error) {
-      console.error("Venue submission failed:", error);
-      toast({
-        title: "Submission Failed",
-        description:
-          error.message || "Could not add venue due to a server error.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const { paginatedVenues, totalPages } = useMemo(() => {
-    const lowercasedSearchTerm = searchTermVenue.toLowerCase();
-    const filtered = venues.filter(
-      (v) =>
-        v.name.toLowerCase().includes(lowercasedSearchTerm) ||
-        v.centerHead.toLowerCase().includes(lowercasedSearchTerm) ||
-        v.address.toLowerCase().includes(lowercasedSearchTerm)
-    );
-
-    const total = filtered.length;
-    const pages = Math.ceil(total / VENUES_PER_PAGE);
-    const pageIndex = Math.max(0, currentPage - 1);
-    const start = pageIndex * VENUES_PER_PAGE;
-    const end = start + VENUES_PER_PAGE;
-    const paginated = filtered.slice(start, end);
-    if (paginated.length === 0 && currentPage > 1) {
-      setCurrentPage(Math.max(1, currentPage - 1));
-    }
-
-    return { paginatedVenues: paginated, totalPages: pages };
-  }, [venues, searchTermVenue, currentPage]);
-  // --- End Venue Management Logic ---
-
-  const unassignedPlayers = players.filter((p) => !p.coach_id); // Use coach_id as returned by API
-  const assignedPlayers = players.filter((p) => p.coach_id); // Use coach_id as returned by API
-
-  const getCoachName = (coachId) => {
-    if (coachId === null || coachId === undefined) return "N/A";
-
-    // Use Number() for comparison robustness
-    const coach = coaches.find((c) => Number(c.coach_id) === Number(coachId));
-    return coach ? coach.coach_name : "N/A";
-  };
-
-  /**
-   * FIX: Helper function to get the selected coach object based on ID,
-   * converting the coach_id from the list to a number for reliable comparison.
-   */
-  const getSelectedCoach = () => {
-    // If we have a numeric selectedCoach, prefer numeric match
-    if (selectedCoach !== null && selectedCoach !== undefined) {
-      return coaches.find((c) => Number(c.coach_id) === selectedCoach);
-    }
-
-    // Fallback: if selectedCoach is not numeric but we have a string id from Select, match by string
-    if (selectedCoachId) {
-      return coaches.find((c) => String(c.coach_id) === String(selectedCoachId));
-    }
-
-    return null;
-  };
-
-  // Get the coach object for use in SelectValue rendering
-  const selectedCoachDisplay = getSelectedCoach();
-
-  const handlePlayerCheckboxChange = (playerId) => {
-    setSelectedPlayers((prev) => {
-      if (prev.includes(playerId)) {
-        return prev.filter((id) => id !== playerId);
-      } else {
-        return [...prev, playerId];
-      }
-    });
-  };
-
-  const handleClearAllPlayers = () => {
-    setSelectedPlayers([]);
-  };
-
-  const handleApplyPlayers = () => {
-    setSearchTerm("");
-    setIsPlayerPopoverOpen(false);
-  };
-
-  const getSelectedPlayerDisplay = () => {
-    const selectedNames = selectedPlayers
-      .map((id) => {
-        // Find player by 'id' which is used in the Popover/Checkbox
-        const player = players.find((p) => p.id === id);
-        return player ? player.name : null;
-      })
-      .filter((name) => name !== null);
-
-    if (selectedNames.length === 0) {
-      return "Choose player(s)...";
-    }
-
-    if (selectedNames.length <= 2) {
-      return selectedNames.join(", ");
-    }
-
-    return `${selectedNames[0]}... (+${selectedNames.length - 1} more)`;
-  };
-
-  const filteredPlayers = useMemo(() => {
-    if (!searchTerm) {
-      // Show ALL players for filtering, as per component use
-      return players;
-    }
-    const lowercasedSearchTerm = searchTerm.toLowerCase();
-
-    return players.filter((player) => {
-      const nameMatch = player.name
-        .toLowerCase()
-        .includes(lowercasedSearchTerm);
-      // 'id' is the primary key used in the UI for tracking/checkboxes
-      const idMatch = player.id
-        ?.toString()
-        .toLowerCase()
-        .includes(lowercasedSearchTerm);
-      const playerIdMatch = player.player_id // 'player_id' is the domain ID
-        ?.toString()
-        .toLowerCase()
-        .includes(lowercasedSearchTerm);
-
-      return nameMatch || idMatch || playerIdMatch;
-    });
-  }, [players, searchTerm]);
-
- const handleAssign = async () => {
-    if (selectedPlayers.length === 0 || (selectedCoach === null && !selectedCoachId)) {
+  const handleAssign = async () => {
+    if (selectedPlayers.length === 0 || !selectedCoachId) {
       toast({
         title: "Error",
         description: "Please select at least one player and one coach.",
@@ -435,49 +144,30 @@ export default function StaffDashboard() {
       return;
     }
 
-    
-    const coachIdRaw = selectedCoach !== null && selectedCoach !== undefined ? selectedCoach : selectedCoachId;
-    const coachToAssign = coaches.find((c) => {
-      if (!c) return false;
-      const coachIdStr = c.coach_id !== undefined && c.coach_id !== null ? String(c.coach_id) : "";     
-      if (String(coachIdRaw) === coachIdStr) return true;
-      const rawNum = Number(coachIdRaw);
-      const cNum = Number(c.coach_id);
-      if (!isNaN(rawNum) && !isNaN(cNum) && rawNum === cNum) return true;
-      return false;
-    });
+    const coachToAssign = coaches.find(
+      (c) => String(c.coach_id) === String(selectedCoachId),
+    );
 
     if (!coachToAssign) {
-      console.error("Coach lookup failed. coaches list:", coaches, "selectedCoachId:", selectedCoachId, "selectedCoach:", selectedCoach);
       toast({
         title: "Error",
-        description: "Coach data inconsistency found. Please reload the coaches list and try again.",
+        description: "Coach lookup failed.",
         variant: "destructive",
       });
       return;
     }
 
     let successCount = 0;
-    let failureCount = 0;
-
     for (const playerId of selectedPlayers) {
       const player = players.find((p) => p.id === playerId);
-
-      if (!player || !player.player_id) {
-        console.error(
-          `Player with ID ${playerId} not found or missing player_id.`
-        );
-        failureCount++;
-        continue;
-      }
+      if (!player) continue;
 
       try {
-        const coachIdToSend = coachToAssign.coach_id;
         await AssignCoachupdated(
           coachToAssign.coach_name,
-          coachIdToSend,
+          coachToAssign.coach_id,
           player.player_id,
-          player.id
+          player.id,
         );
 
         setPlayers((prevPlayers) =>
@@ -485,298 +175,360 @@ export default function StaffDashboard() {
             p.id === playerId
               ? {
                   ...p,
-                  coach_id: coachIdToSend,
+                  coach_id: coachToAssign.coach_id,
                   coach_name: coachToAssign.coach_name,
                 }
-              : p
-          )
+              : p,
+          ),
         );
         successCount++;
       } catch (error) {
-        console.error(
-          `Assignment API failed for player ${player.name}:`,
-          error
-        );
-        failureCount++;
+        console.error(`Assignment failed for ${player.name}:`, error);
       }
     }
 
     if (successCount > 0) {
       toast({
         title: "Assignment Complete",
-        description: `${successCount} player(s) successfully assigned to coach ${
-          coachToAssign.coach_name
-        }. ${failureCount > 0 ? `(${failureCount} failed)` : ""}`,
-      });
-    } else {
-      toast({
-        title: "Assignment Failed",
-        description: "Could not assign any player due to server errors.",
-        variant: "destructive",
+        description: `${successCount} player(s) assigned to ${coachToAssign.coach_name}.`,
       });
     }
-
-    // Reset selection and search term after attempts
     setSelectedPlayers([]);
-    setSelectedCoach(null);
     setSelectedCoachId("");
-    setSearchTerm("");
-  };// <-- This is the required closing bracket for the function
+  };
+
+  const handlePlayerCheckboxChange = (playerId) => {
+    setSelectedPlayers((prev) =>
+      prev.includes(playerId)
+        ? prev.filter((id) => id !== playerId)
+        : [...prev, playerId],
+    );
+  };
+
+  const getSelectedPlayerDisplay = () => {
+    const selectedNames = players
+      .filter((p) => selectedPlayers.includes(p.id))
+      .map((p) => p.name);
+    if (selectedNames.length === 0) return "Choose student(s)...";
+    return selectedNames.length <= 2
+      ? selectedNames.join(", ")
+      : `${selectedNames[0]}... (+${selectedNames.length - 1} more)`;
+  };
+
+  // Stats should reflect the currently visible (filtered) players
+  // We'll compute stats from the final filtered list below.
+
+ 
+
+  // Step 1: apply search + status filters
+  const baseFilteredPlayers = players.filter((player) => {
+    const coachName = (
+      player.coach_name ||
+      (getCoachNameById && getCoachNameById(player.coach_id)) ||
+      ""
+    ).toLowerCase();
+    const playerName = (player.name || "").toLowerCase();
+    const playerId = (player.player_id || "").toString();
+
+    const matchesSearch =
+      playerName.includes(searchTerm.toLowerCase()) ||
+      playerId.includes(searchTerm) ||
+      coachName.includes(searchTerm.toLowerCase());
+
+    if (filterStatus === "assigned") return matchesSearch && !!player.coach_id;
+    if (filterStatus === "unassigned") return matchesSearch && !player.coach_id;
+    return matchesSearch;
+  });
+
+  // Step 2: apply coach filter if selectedCoach !== 'all'
+  const filteredPlayers =
+    selectedCoach && selectedCoach !== "all"
+      ? baseFilteredPlayers.filter((p) => String(p.coach_id) === String(selectedCoach))
+      : baseFilteredPlayers;
+
+  const stats = useMemo(() => {
+    const total = filteredPlayers.length;
+    const assigned = filteredPlayers.filter((p) => !!p.coach_id).length;
+    const unassigned = total - assigned;
+    return { total, assigned, unassigned };
+  }, [filteredPlayers]);
 
   return (
     <div className="space-y-6 p-4 md:p-6">
       <Tabs defaultValue="Assigned" className="space-y-4">
-        <Card>
+        <Card className="border-t-4 border-t-[#1A9CFF] shadow-card">
           <CardHeader>
-            <CardTitle>Assign teacher to Player</CardTitle>
+            <CardTitle className="text-[#1A9CFF]">
+              Assign Student to Teacher
+            </CardTitle>
             <CardDescription>
-              Select a coach and one or more Student to make an assignment.
+              Select a teacher and students to make an assignment.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">
-                  Select Teacher
-                </Label>
-
+                <Label>Select Teacher</Label>
                 <Select
                   value={selectedCoachId}
-                  onValueChange={(value) => {
-                    setSelectedCoachId(value);
-                    const numeric = value === "" ? null : Number(value);
-                    setSelectedCoach(Number.isNaN(numeric) ? null : numeric);
-                    console.log("Selected coach id:", value);
-                  }}
+                  onValueChange={setSelectedCoachId}
                 >
-                  <SelectTrigger className="border-border">
-                    <SelectValue placeholder="Choose a coach" />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a teacher" />
                   </SelectTrigger>
-
                   <SelectContent>
-                    {coaches.length > 0 ? (
-                      coaches.map((coach) => (
-                        <SelectItem
-                          key={coach.coach_id}
-                          value={String(coach.coach_id)} // MUST match the Select value
-                        >
-                          {coach.coach_name} - {coach.category}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="no-coaches" disabled>
-                        No teachers found
+                    {coaches.map((coach) => (
+                      <SelectItem
+                        key={coach.coach_id}
+                        value={String(coach.coach_id)}
+                      >
+                        {coach.coach_name}
                       </SelectItem>
-                    )}
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">
-                  Select Student(s)
-                </Label>
 
+              <div className="space-y-2">
+                <Label>Select student(s)</Label>
                 <Popover
                   open={isPlayerPopoverOpen}
-                  onOpenChange={(open) => {
-                    setIsPlayerPopoverOpen(open);
-                    if (!open) setSearchTerm("");
-                  }}
+                  onOpenChange={setIsPlayerPopoverOpen}
                 >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
-                      role="combobox"
-                      aria-expanded={isPlayerPopoverOpen}
-                      className="w-full justify-between border-border"
+                      className="w-full justify-between"
                     >
                       <span className="truncate">
                         {getSelectedPlayerDisplay()}
                       </span>
-                      <Check className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      <Check className="ml-2 h-4 w-4 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-
                   <PopoverContent className="w-[450px] p-0">
                     <div className="p-2 border-b">
                       <Input
-                        placeholder="Search player name or ID..."
-                        className="border-0 focus-visible:ring-0"
+                        placeholder="Search..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
                     </div>
-
                     <ScrollArea className="h-[300px] p-4">
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                        {filteredPlayers.length === 0 ? (
-                          <div className="col-span-2 text-center text-sm opacity-70 py-4">
-                            {searchTerm
-                              ? `No players found matching "${searchTerm}".`
-                              : "No players found."}
-                          </div>
-                        ) : (
-                          filteredPlayers.map((player) => (
-                            <div
-                              // Ensure player.id exists (it's the internal DB key)
-                              key={player.id}
-                              className="flex items-center space-x-2 py-1"
+                      <div className="grid grid-cols-2 gap-2">
+                        {filteredPlayers.map((player) => (
+                          <div
+                            key={player.id}
+                            className="flex items-center space-x-2"
+                          >
+                            <Checkbox
+                              id={`p-${player.id}`}
+                              checked={selectedPlayers.includes(player.id)}
+                              onCheckedChange={() =>
+                                handlePlayerCheckboxChange(player.id)
+                              }
+                            />
+                            <Label
+                              htmlFor={`p-${player.id}`}
+                              className="text-sm font-normal"
                             >
-                              <Checkbox
-                                id={`player-${player.id}`}
-                                checked={selectedPlayers.includes(player.id)}
-                                onCheckedChange={() =>
-                                  handlePlayerCheckboxChange(player.id)
-                                }
-                              />
-                              <Label
-                                htmlFor={`player-${player.id}`}
-                                className="text-sm font-normal cursor-pointer flex-1"
-                              >
-                                {player.name} (Coach:{" "}
-                                {player.coach_name || "Unassigned"}){" "}
-                              </Label>
-                            </div>
-                          ))
-                        )}
+                              {player.name}
+                            </Label>
+                          </div>
+                        ))}
                       </div>
                     </ScrollArea>
-
-                    <div className="flex justify-between items-center p-2 border-t">
-                      <Button
-                        variant="ghost"
-                        onClick={handleClearAllPlayers}
-                        className="text-sm text-muted-foreground"
-                        disabled={selectedPlayers.length === 0}
-                      >
-                        CLEAR ALL
-                      </Button>
-                      <Button
-                        onClick={handleApplyPlayers}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                      >
-                        Done Selecting
-                      </Button>
-                    </div>
                   </PopoverContent>
                 </Popover>
               </div>
             </div>
 
-            <Button
-              onClick={handleAssign}
-              disabled={
-                // The button is disabled when no players selected, no coach selected (either numeric or string), or no players loaded
-                selectedPlayers.length === 0 ||
-                (selectedCoach === null && (!selectedCoachId || selectedCoachId === "")) ||
-                players.length === 0
-              }
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-            >
-              <UserPlus className="mr-2 h-4 w-4" />
-              Assign Student
-            </Button>
+            <div className="flex items-center w-full justify-end">
+              <Button
+                onClick={handleAssign}
+                className="bg-[#1A9CFF] hover:bg-[#1582d8] text-white shadow-sm rounded-xl px-5 transition-all border-none font-medium"
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Assign students
+              </Button>
+            </div>
 
             <div className="flex justify-between text-sm pt-4 border-t">
               <p>
-                Unassigned Student:{" "}
-                <span className="font-bold text-red-500">
-                  {unassignedPlayers.length}
-                </span>
+                Unassigned: {" "}
+                <span className="text-red-500 font-bold">{stats.unassigned}</span>
               </p>
               <p>
-                Assigned Student:{" "}
-                <span className="font-bold text-green-600">
-                  {assignedPlayers.length}
-                </span>
+                Assigned: {" "}
+                <span className="text-[#1A9CFF] font-bold">{stats.assigned}</span>
               </p>
               <p>
-                Total Students:{" "}
-                <span className="font-bold">{players.length}</span>
+                Total: <span className="font-bold">{players.length}</span>
               </p>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>All Student Details</CardTitle>
-            <CardDescription>
-              A complete list of all Students and their current teacher
-              assignments.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {players.length === 0 ? (
-                <div className="text-center p-6 opacity-70 border rounded">
-                  <Users className="mx-auto mb-2 h-6 w-6" />
-                  No Student data loaded. Please check API connection.
-                </div>
-              ) : (
-                players.map((player) => {
-                  // Use coach_id for checking assignment status
-                  const isAssigned =
-                    player.coach_id !== null && player.coach_id !== undefined;
-                  // Use coach_id to get coach name
-                  const coachName = getCoachName(player.coach_id);
+        
 
-                  return (
+        {/* Updated Student List Section */}
+        <Card className="space-y-6 p-4 md:p-6">
+      <CardHeader className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <CardTitle className="text-2xl font-bold text-gray-800">
+            Student Management
+          </CardTitle>
+
+          <div className="flex flex-wrap items-center gap-2">
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search name or ID..."
+                className="pl-8 w-full md:w-[220px] bg-gray-50 border-gray-200"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* Assigned Filter */}
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[140px] bg-gray-50">
+                <Filter className="h-4 w-4 mr-2 text-gray-500" />
+                <SelectValue placeholder="Filter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="assigned">Assigned</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Coach Dropdown */}
+            <Select value={selectedCoach} onValueChange={setSelectedCoach}>
+              <SelectTrigger className="w-[170px] bg-gray-50">
+                <Users className="h-4 w-4 mr-2 text-gray-500" />
+                <SelectValue placeholder="Select Coach" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Coaches</SelectItem>
+
+                {coaches.map((coach) => (
+                  <SelectItem key={coach.id} value={coach.coach_id}>
+                    {coach.coach_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 pb-2">
+          <div className="bg-gray-50 p-3 rounded-xl border flex items-center space-x-3">
+            <Users className="h-5 w-5 text-gray-600" />
+            <div>
+              <p className="text-xs text-gray-500">Total</p>
+              <p className="font-bold text-lg">{stats.total}</p>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 p-3 rounded-xl border flex items-center space-x-3">
+            <CheckCircle2 className="h-5 w-5 text-blue-600" />
+            <div>
+              <p className="text-xs text-blue-500">Assigned</p>
+              <p className="font-bold text-lg text-blue-700">
+                {stats.assigned}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-red-50 p-3 rounded-xl border flex items-center space-x-3">
+            <HelpCircle className="h-5 w-5 text-red-600" />
+            <div>
+              <p className="text-xs text-red-500">Unassigned</p>
+              <p className="font-bold text-lg text-red-700">
+                {stats.unassigned}
+              </p>
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        <div className="space-y-2 max-h-[450px] overflow-y-auto pr-2">
+          {filteredPlayers.length > 0 ? (
+            filteredPlayers.map((player) => {
+              const isAssigned = !!player.coach_id;
+              const displayCoachName =
+                player.coach_name || getCoachNameById(player.coach_id);
+
+              return (
+                <div
+                  key={player.id}
+                  className="flex items-center justify-between p-4 border rounded-xl hover:shadow-sm bg-white"
+                >
+                  <div className="flex items-center space-x-4">
                     <div
-                      key={player.id}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                      className={`p-2.5 rounded-full ${
+                        isAssigned
+                          ? "bg-blue-50 text-blue-500"
+                          : "bg-gray-50 text-gray-400"
+                      }`}
                     >
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className={`p-2 rounded-full ${
-                            isAssigned
-                              ? "bg-green-100 text-green-600"
-                              : "bg-red-100 text-red-600"
-                          }`}
-                        >
-                          {isAssigned ? (
-                            <UserCheck className="h-5 w-5" />
-                          ) : (
-                            <UserX className="h-5 w-5" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-base">
-                            {player.name}
-                          </p>
-                          <p className="text-sm opacity-70">
-                            Student ID: {player.player_id || "N/A"} | Category:{" "}
-                            {player.category || "N/A"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {isAssigned ? (
-                          <>
-                            <Badge className="bg-green-500 hover:bg-green-500/90">
-                              Assigned
-                            </Badge>
-                            <p className="text-sm font-medium mt-1">
-                              Teacher: {coachName}
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <Badge variant="destructive">Unassigned</Badge>
-                            <p className="text-sm opacity-50 mt-1">
-                              Ready for assignment
-                            </p>
-                          </>
-                        )}
-                      </div>
+                      {isAssigned ? (
+                        <UserCheck className="h-5 w-5" />
+                      ) : (
+                        <UserX className="h-5 w-5" />
+                      )}
                     </div>
-                  );
-                })
-              )}
+
+                    <div>
+                      <p className="font-bold text-gray-900">{player.name}</p>
+                      <p className="text-xs text-gray-400">
+                        ID: {player.player_id}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right flex flex-col items-end gap-1">
+                    {isAssigned ? (
+                      <>
+                        <Badge className="bg-blue-500 text-white border-none text-[10px]">
+                          ASSIGNED
+                        </Badge>
+
+                        <p className="text-xs text-gray-500">
+                          Coach:{" "}
+                          <span className="text-blue-600 font-bold">
+                            {displayCoachName || "N/A"}
+                          </span>
+                        </p>
+                      </>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="text-gray-400 border-gray-200 text-[10px]"
+                      >
+                        UNASSIGNED
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-400 italic">
+                No students match your criteria.
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
+      </CardContent>
+    </Card>
       </Tabs>
     </div>
   );

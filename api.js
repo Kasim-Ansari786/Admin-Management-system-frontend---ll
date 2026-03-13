@@ -1,14 +1,16 @@
 import axios from "axios";
 
 // --- Configuration ---
-const API_URL = "http://localhost:5000";
+// Use local backend during development to avoid CORS and reach the dev server
+const API_URL = "https://coneadminbackend.comdata.in";
+//export const API_URL = "http://localhost:5001";
+// Production backend: https://coneadminbackend.comdata.in
 const TOKEN_KEY = "token";
-const REFRESH_KEY = "refreshToken"; // Refresh Token Key
+const REFRESH_KEY = "refreshToken"; 
 
 // --- Storage Utilities ---
 
 const readTokenFromStorage = () => {
-  // Backwards-compatibility: also check for legacy 'authToken' key used elsewhere
   return (
     localStorage.getItem(TOKEN_KEY) ||
     localStorage.getItem("authToken") ||
@@ -23,10 +25,7 @@ const readRefreshFromStorage = () => {
 };
 
 const saveTokensToStorage = ({ token, refreshToken, persist = true }) => {
-  // persist = true => localStorage, false => sessionStorage
   const storage = persist ? localStorage : sessionStorage;
-
-  // Clear session storage if persisting to local, and vice-versa, to ensure one source of truth
   const otherStorage = persist ? sessionStorage : localStorage;
   otherStorage.removeItem(TOKEN_KEY);
   otherStorage.removeItem(REFRESH_KEY);
@@ -231,10 +230,17 @@ export const signupUser = async ({ name, email, password, role }) => {
 
 export const loginUser = async ({ email, password, role }) => {
   try {
+    // Ensure data sent to server is clean
+    const payload = {
+      email: email.trim().toLowerCase(),
+      password: password, // Password should NOT be lowercased
+      role: role.toLowerCase(),
+    };
+
     const response = await fetch(`${API_URL}/api/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, role }), 
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();
@@ -243,16 +249,14 @@ export const loginUser = async ({ email, password, role }) => {
       const errorMessage = data.message || data.error || "Login failed.";
       return { data: null, error: errorMessage };
     }
-    // Save tokens if provided by the backend (access token and optional refresh token)
+
     const accessToken = data.token ?? data.accessToken ?? null;
     const refreshToken = data.refreshToken ?? null;
 
     if (accessToken) {
-      // Persist tokens to localStorage by default
       saveTokensToStorage({ token: accessToken, refreshToken, persist: true });
     }
 
-    // Also persist the user object using saveAuth helper
     if (data.user) {
       saveAuth({ token: accessToken, user: data.user });
     }
@@ -263,6 +267,7 @@ export const loginUser = async ({ email, password, role }) => {
         token: accessToken,
         refreshToken,
         role: data.user?.role,
+        logo: data.user?.logo || null,
       },
       error: null,
     };
@@ -345,25 +350,23 @@ export const AddNewPlayerDetails = async (formData) => {
 //coach list show the assgin the coach and players
 export const GetCoachDetailslist = async () => {
   try {
-    const response = await axios.get(`${API_URL}/api/coaches-list`, {
-      headers: getAuthHeaders(), 
-      withCredentials: true, 
-    });
-
-    return response.data;
+    // Use shared axios instance so interceptors attach tokens and handle refresh
+    const resp = await api.get("/api/coaches-list", { withCredentials: true });
+    // Normalize: backend may return { data: [...] } or full array
+    const body = resp?.data ?? resp;
+    if (Array.isArray(body)) return body;
+    // prefer body.data when present
+    return body?.data ?? body;
   } catch (error) {
-    const errorDetail = error.response 
-        ? error.response.data || error.response.statusText 
-        : error.message;
-
+    const errorDetail = error?.response?.data ?? error?.message ?? error;
     console.error("Error fetching coach details:", errorDetail);
-    throw new Error(`Failed to fetch coach details: ${errorDetail}`);
+    // Return empty array instead of throwing to avoid breaking UIs
+    return [];
   }
 };
 
 //update the player details
 export const GetPlayerEditDetails = async (id, player_id) => {
-  // 1. Validate if IDs are provided before making the request
   if (!id || !player_id) {
     throw new Error(
       "Missing required parameters: id and player_id for fetching player details."
@@ -371,10 +374,8 @@ export const GetPlayerEditDetails = async (id, player_id) => {
   }
 
   try {
-    // 2. Pass the IDs as query parameters using Axios 'params' property
     const response = await axios.get(`${API_URL}/api/Player-edit`, {
       params: {
-        // Use 'params' to automatically construct the query string: ?id=...&player_id=...
         id: id,
         player_id: player_id,
       },
@@ -390,43 +391,80 @@ export const GetPlayerEditDetails = async (id, player_id) => {
 
 //update the player details
 export const updateplayersedit = async (playerId, playerData) => {
-  if (!playerId)
-    throw new Error("Missing playerId when calling updateplayersedit.");
-
+  if (!playerId) throw new Error("Missing playerId.");
   const url = `${API_URL}/api/Player-Edit/${encodeURIComponent(playerId)}`;
-
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(playerData),
-    // credentials: 'include' // uncomment if you use cookies/auth
-  });
-
-  let payload;
   try {
-    payload = await res.json();
+    let res;
+    const hasFile = Object.keys(playerData || {}).some((k) =>
+      k.endsWith("_file") || playerData[k] instanceof File ||
+      (playerData[k] && playerData[k].constructor && playerData[k].constructor.name === 'File')
+    );
+
+    if (hasFile) {
+      const form = new FormData();
+      for (const key of Object.keys(playerData || {})) {
+        const val = playerData[key];
+        if (key.endsWith("_file") && val) {
+          const fieldName = key.replace(/_file$/, "");
+          form.append(fieldName, val);
+          continue;
+        }
+        const fileKey = `${key}_file`;
+        if (playerData[fileKey]) continue;
+
+        if (val !== undefined && val !== null) {
+          form.append(key, val);
+        } else {
+          form.append(key, "");
+        }
+      }
+
+      const token = readTokenFromStorage();
+      const fetchHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      res = await fetch(url, {
+        method: "PUT",
+        body: form,
+        headers: fetchHeaders,
+        credentials: 'include',
+      });
+    } else {
+      const token = readTokenFromStorage();
+      const fetchHeaders = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      res = await fetch(url, {
+        method: "PUT",
+        headers: fetchHeaders,
+        credentials: 'include',
+        body: JSON.stringify(playerData),
+      });
+    }
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch (e) {
+      payload = null;
+    }
+
+    if (!res.ok) {
+      if (res.status === 413) {
+        const message = (payload && (payload.error || payload.message)) || 'Upload error: file too large (413)';
+        const error = new Error(message);
+        error.status = 413;
+        throw error;
+      }
+      const error = new Error((payload && (payload.error || payload.message)) || `Update failed (status ${res.status})`);
+      error.status = res.status;
+      throw error;
+    }
+
+    return payload;
   } catch (err) {
-    // If server returned non-JSON, fallback to text
-    const text = await res.text();
-    throw new Error(`Server returned non-JSON response: ${text}`);
+    console.error("Fetch Error:", err);
+    throw err;
   }
-
-  if (!res.ok) {
-    // Try to return helpful message
-    const errMsg =
-      payload?.error ||
-      payload?.message ||
-      JSON.stringify(payload) ||
-      `HTTP ${res.status}`;
-    const error = new Error(errMsg);
-    error.status = res.status;
-    error.payload = payload;
-    throw error;
-  }
-
-  return payload;
 };
 
 //delete the player details
@@ -442,16 +480,33 @@ export const deletePlayer = async (playerId) => {
 
 export const AddCoachdata = async (apiData) => {
   const headers = getAuthHeaders();
+  
+  // Ensure we are sending FormData for multipart/form-data
+  let body = apiData;
+  if (!(apiData instanceof FormData)) {
+    body = new FormData();
+    for (const key in apiData) {
+      // Handle nested objects/arrays
+      if (typeof apiData[key] === 'object' && !(apiData[key] instanceof File)) {
+        body.append(key, JSON.stringify(apiData[key]));
+      } else {
+        body.append(key, apiData[key]);
+      }
+    }
+  }
 
   try {
-    const response = await api.post('/api/coaches', apiData, {
-      headers,
+    const response = await api.post('/api/coaches', body, {
+      headers: {
+        ...headers,
+        // Let the browser set the boundary for multipart/form-data automatically
+        'Content-Type': undefined, 
+      },
       withCredentials: true,
     });
     return response.data;
   } catch (err) {
-    console.error('Error in AddCoachdata:', err?.response ?? err.message ?? err);
-    throw new Error(err?.response?.data?.message || err?.message || 'Failed to add coach');
+    throw new Error(err?.response?.data?.message || 'Failed to add coach');
   }
 };
 
@@ -473,40 +528,28 @@ export const GetCoachDetails = async () => {
 };
 
 //coach update notes
-export const UpdateCoachdata = async (apiData) => {
-  const idValue = apiData?.coach_id ?? apiData?.id;
+export const UpdateCoachdata = async (formData) => {
+  // Use formData.get() to retrieve the ID from the FormData object
+  const idValue = formData.get("coach_id");
+  
   if (!idValue) {
     throw new Error("Missing coach_id when calling UpdateCoachdata.");
   }
-  const payload = {
-    coach_id: idValue,
-    coach_name: apiData?.coach_name ?? apiData?.name ?? null,
-    phone_numbers: apiData?.phone_numbers ?? null,
-    email: apiData?.email ?? null,
-    location: apiData?.location ?? null,
-    salary:
-      apiData?.salary !== undefined && apiData.salary !== null && apiData.salary !== ""
-        ? (() => {
-            const parsed = parseFloat(apiData.salary);
-            return Number.isFinite(parsed) ? parsed : null;
-          })()
-        : null,
-    week_salary: apiData?.week_salary ?? null,
-    active: apiData?.active !== undefined ? apiData.active : null,
-    status: apiData?.status ?? null,
-  };
+
   const endpoint = `${API_URL}/api/coaches-update/${encodeURIComponent(idValue)}`;
+
   try {
-    const response = await axios.put(endpoint, payload, {
-      headers: getAuthHeaders(),
+    const response = await axios.put(endpoint, formData, {
+      headers: {
+        ...getAuthHeaders(),
+        // Axios will automatically set the correct Boundary for multipart/form-data
+      },
       withCredentials: true,
     });
     return response.data;
   } catch (error) {
     const serverData = error?.response?.data ?? null;
-    const serverMsg =
-      serverData?.message || serverData?.error || error.message || String(error);
-    console.error(`API Call Failed (${endpoint}):`, serverData ?? error);
+    const serverMsg = serverData?.error || error.message;
     throw new Error(serverMsg || "Failed to update coach data.");
   }
 };
@@ -606,14 +649,15 @@ export async function fetchVenuesdetails() {
         : { error: "Server returned non-JSON response." };
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-          console.warn("Token invalid or expired. User needs to re-authenticate.");
-          throw new Error("Unauthorized: Invalid or expired token.");
-      }
-      throw new Error(
-        data.error || "Failed to fetch venue data from the server."
-      );
-    }
+  if (response.status === 401 || response.status === 403) {
+    console.warn("Token invalid or expired. Redirecting to login...");
+    localStorage.removeItem('token'); 
+    window.location.href = "/auth"; 
+    
+    throw new Error("Session expired. Please log in again.");
+  }
+  throw new Error(data.error || "Failed to fetch venue data.");
+}
     return data;
   } catch (error) {
     console.error("Error fetching venues:", error);
@@ -624,13 +668,10 @@ export async function fetchVenuesdetails() {
 //venue details add
 export async function addVenueData(venueData) {
   try {
-    // `getAuthHeaders` returns an object of headers; to read the raw token use `getToken`.
     const token = getToken();
-
     if (!token) {
       throw new Error("Authentication token not found. Please log in.");
     }
-
     const response = await fetch(`${API_URL}/api/venue-add`, {
       method: "POST",
       headers: {
@@ -689,12 +730,11 @@ export const fetchCoachAssignedPlayers = async (token) => {
   if (!token) {
     console.error(
       "Missing token for player fetch. This should be handled by the client."
-    ); // If the client fails to check, we still return an empty array to prevent crashing
+    ); 
     throw new Error("Access Denied: No Token Provided");
   }
 
   try {
-    // Calls the secure, parameter-less server route
     const response = await fetch(`${API_URL}/api/coach-data`, {
       method: "GET",
       headers: {
@@ -721,7 +761,7 @@ export const fetchCoachAssignedPlayers = async (token) => {
         result
       );
       return [];
-    } // Normalize data using the aliases 'id' and 'attendance' from the SQL query
+    } 
 
     return result.players.map((player) => ({
       id: player.id || player.player_id,
@@ -732,12 +772,12 @@ export const fetchCoachAssignedPlayers = async (token) => {
       attendance: parseFloat(player.attendance || 0),
     }));
   } catch (err) {
-    console.error("Error fetching coach players:", err); // Re-throw the error so the client component's `catch` block can handle it
+    console.error("Error fetching coach players:", err);
     throw err;
   }
 };
 
-/// ---------------------------------------------
+
 //attandance update by coach
 export const recordAttendance = async (attendanceData, token) => {
   const endpoint = `${API_URL}/api/attendance`;
@@ -751,9 +791,7 @@ export const recordAttendance = async (attendanceData, token) => {
       },
       body: JSON.stringify(attendanceData),
     });
-
     const result = await response.json().catch(() => ({}));
-
     if (!response.ok) {
       throw new Error(result.error || `Error ${response.status}: Failed to save record.`);
     }
@@ -765,92 +803,51 @@ export const recordAttendance = async (attendanceData, token) => {
   }
 };
 
-// ---------------------------------------------
+
 // Fetch the parent's players by guardian email
 export const getPlayerDetailsByGuardianEmail = async (email, maybePlayerIdOrToken, maybeToken) => {
-
   let playerId = null;
   let token = null;
 
   if (maybeToken !== undefined) {
-    // Called with (email, playerId, token)
     playerId = maybePlayerIdOrToken;
     token = maybeToken;
   } else {
-    // Called with (email, token)
     token = maybePlayerIdOrToken;
   }
 
   if (!email || !token) {
-    throw new Error("Missing required credentials (email or token).");
+    throw new Error("Missing credentials.");
   }
 
-  try {
-    if (playerId) {
-      // Fetch single player by id
-      const response = await fetch(`${API_URL}/api/player-details/${encodeURIComponent(email)}/${playerId}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  const url = playerId 
+    ? `${API_URL}/api/player-details/${encodeURIComponent(email.trim())}/${playerId}`
+    : `${API_URL}/api/player-details-by-guardian/${encodeURIComponent(email.trim())}`;
 
-      if (!response.ok) {
-        let errorData = {};
-        try { errorData = await response.json(); } catch (e) {}
-        throw new Error(`API Error ${response.status}: ${errorData.error || errorData.message || "Failed to fetch player data."}`);
-      }
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+  });
 
-      const childData = await response.json();
-      return {
-        player_id: childData.player_id,
-        name: childData.name,
-        age: childData.age,
-        center: childData.center,
-        coach: childData.coach,
-        position: childData.position,
-        phone_no: childData.phone_no,
-        player_email: childData.player_email,
-        attendance_percentage: parseFloat(childData.attendance_percentage) || 0,
-        recent_activities: childData.recent_activities_json || [],
-      };
-    }
-
-    // No playerId -> fetch all players for the guardian
-    const listResp = await fetch(`${API_URL}/api/player-details-by-guardian/${encodeURIComponent(email)}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!listResp.ok) {
-      let errData = {};
-      try { errData = await listResp.json(); } catch (e) {}
-      throw new Error(`API Error ${listResp.status}: ${errData.error || errData.message || "Failed to fetch players list."}`);
-    }
-
-    const rows = await listResp.json();
-    // Return array (frontend expects an array)
-    return Array.isArray(rows) ? rows.map((child) => ({
-      player_id: child.player_id,
-      name: child.name,
-      age: child.age,
-      center: child.center,
-      coach: child.coach,
-      position: child.position,
-      phone_no: child.phone_no,
-      player_email: child.player_email,
-      attendance_percentage: parseFloat(child.attendance_percentage) || 0,
-      recent_activities: child.recent_activities_json || [],
-    })) : [];
-
-  } catch (err) {
-    console.error("Error fetching player details:", err.message || err);
-    throw err;
+  if (!response.ok) {
+    if (response.status === 404) return [];
+    const errorData = await response.json();
+    throw new Error(errorData.error || `Error ${response.status}`);
   }
+
+  const data = await response.json();
+  
+  // Helper to format data consistently
+  const format = (item) => ({
+    ...item,
+    attendance_percentage: parseFloat(item.attendance_percentage) || 0,
+    recent_activities: item.recent_activities_json || [],
+  });
+
+  return Array.isArray(data) ? data.map(format) : [format(data)];
 };
 
 //add the registrations
@@ -1049,11 +1046,32 @@ export const getCoachPlayers = async (coachId) => {
 
     return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
+    const status = error.response?.status;
+    const respData = error.response?.data;
     if (error.response) {
-       console.error("Error fetching coach players data:", error.response.data);
+      console.error("Error fetching coach players data:", respData || status || error.message);
     } else {
-       console.error("Network / unknown error fetching coach players:", error.message);
+      console.error("Network error fetching coach players:", error.message);
+      return [];
     }
+    try {
+      const idStr = String(coachId);
+      const numeric = idStr.replace(/[^0-9]/g, "");
+      if (numeric && numeric !== idStr) {
+        const token2 = localStorage.getItem('token');
+        const resp2 = await axios.get(`${API_URL}/api/coachplayers/${numeric}/players`, {
+          headers: {
+            Authorization: token2 ? `Bearer ${token2}` : '',
+            'Content-Type': 'application/json',
+          },
+          withCredentials: true,
+        });
+        return Array.isArray(resp2.data) ? resp2.data : [];
+      }
+    } catch (retryErr) {
+      console.error("Retry (numeric id) failed:", retryErr?.response?.data || retryErr.message || retryErr);
+    }
+
     return [];
   }
 };
@@ -1200,6 +1218,28 @@ export const getPaymentsdetails = async () => {
     return response.data?.data ?? response.data ?? [];
   } catch (error) {
     console.error("Error fetching payment details:", error?.response ?? error.message ?? error);
+    const status = error?.response?.status;
+    // If auth/permission failure, try a fallback explicit request using stored token
+    if (status === 401 || status === 403) {
+      const token = readTokenFromStorage();
+      if (token) {
+        try {
+          console.debug('[api] getPaymentsdetails fallback using explicit Authorization header');
+          const fallback = await axios.get(`${API_URL}/api/payments`, {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            withCredentials: true,
+          });
+          return fallback.data?.data ?? fallback.data ?? [];
+        } catch (fbErr) {
+          console.warn('Fallback request also failed:', fbErr?.response ?? fbErr.message ?? fbErr);
+        }
+      }
+      throw new Error(status === 401 ? 'Unauthorized. Please log in again.' : 'Forbidden. Please check your permissions.');
+    }
+
     throw new Error(error.response?.data?.message || error.message || 'Failed to fetch payment records.');
   }
 };
@@ -1386,12 +1426,16 @@ export const GetAttendanceRecords = async (coachId) => {
       withCredentials: true,
     });
 
-    // backend returns an array of rows
     return response.data;
   } catch (error) {
+    const status = error.response?.status;
     const errorDetail = error.response
       ? error.response.data?.message || error.response.data || error.response.statusText
       : error.message;
+
+    if (status === 404 || String(errorDetail).toLowerCase().includes("no data")) {
+      return [];
+    }
 
     console.error("Error fetching attendance records:", errorDetail);
     throw new Error(`Failed to fetch attendance records: ${errorDetail}`);
@@ -1537,34 +1581,19 @@ export const fetchDashboardStats = async () => {
 //fetch the baar chart data API
 export const fetchBarChartData = async () => {
   try {
-    const token = getToken();
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetch(`${API_URL}/api/dashboard-graph/stats`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+    const resp = await api.get("/api/dashboard-graph/stats", {
+      withCredentials: true,
     });
 
-    if (!response.ok) {
-      let errorMessage = 'Failed to fetch bar chart data';
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorMessage;
-      } catch (parseError) {
-        errorMessage = `Error ${response.status}: ${response.statusText}`;
-      }
-      throw new Error(errorMessage);
-    }
-    const result = await response.json();
-    return Array.isArray(result.data) ? result.data : [];
+    const data = resp?.data?.data ?? resp?.data ?? [];
+
+    return Array.isArray(data) ? data : [];
   } catch (error) {
-    console.error('BarChart API Error:', error.message);
-    throw error;
+    console.error(
+      "BarChart API Error:",
+      error?.response?.data || error?.message || error
+    );
+    return [];
   }
 };
 
@@ -1585,7 +1614,6 @@ export const fetchPieChartData = async () => {
 
     if (!response.ok) {
       if (response.status === 404) return [];
-      // Try to parse JSON error, but guard against HTML responses
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         const errData = await response.json().catch(() => null);
@@ -1615,10 +1643,283 @@ export const fetchPieChartData = async () => {
 //line chat show the data API 
 export const getrevenuedetails = async () => {
   try {
-    const response = await api.get('/api/revenue');
+    const response = await axios.get('/api/revenue');
+    // We access response.data.data because of your backend structure { success: true, data: [...] }
     return response.data?.data || [];
   } catch (error) {
     console.error("API Error:", error.response?.data || error.message);
     throw error;
   }
+};
+
+
+//player add the bulk excel sheet API code 
+export const uploadPlayersExcelData = async (file) => {
+  const headers = getAuthHeaders();
+  
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await axios.post(
+    `${API_URL}/api/players-excel/import`,
+    formData,
+    {
+      headers: {
+        ...headers,
+        'Content-Type': 'multipart/form-data',
+      },
+      withCredentials: true,
+    }
+  );
+  return response.data;
+};
+
+const handleApiError = (context, error) => {
+    console.error(`API Error [${context}]:`, error.response?.data || error.message);
+    throw error;
+};
+
+//change the profile picture API code
+export const updatedprofiledata = async (fileOrFormData) => {
+    try {
+        const isFormData = fileOrFormData instanceof FormData;
+        const isFile = fileOrFormData instanceof File;
+        
+        let formData;
+        if (isFormData) {
+            formData = fileOrFormData;
+        } else if (isFile) {
+            formData = new FormData();
+            formData.append('logo', fileOrFormData);
+        } else {
+            throw new Error('Expected File or FormData object');
+        }
+
+        const response = await api.put(`/api/player-logo/update-image`, formData, {
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+
+        console.log("API: Player image updated successfully:", response.data);
+        return response.data;
+    } catch (error) {
+        handleApiError('updatedprofiledata', error);
+        throw error; 
+    }
+};
+
+//venue update the details API code
+export const updatedvenuscode = async (id, venueData) => {
+    try {
+        if (!venueData) throw new Error("Venue data is required");
+        const response = await api.put(`/api/update-venue-complete/${id}`, venueData, {
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json',
+            },
+        });
+        console.log("API: updatedvenuscode: Venue updated successfully:", response.data);
+        return response.data;
+    } catch (error) {
+        handleApiError('updatedvenuscode', error);
+    }
+};
+
+//coach import the excel sheet API code
+export const importExcelInsert = async (file) => {
+    try {
+        const formData = new FormData();
+        formData.append('excelFile', file); 
+        const response = await api.post('/api/upload-coaches', formData, {
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'multipart/form-data',
+            },
+            timeout: 60000 
+        });
+        return response.data;
+    } catch (error) {
+        handleApiError('importExcelInsert', error);
+    }
+};
+
+// Fetch event players by event ID
+export const fetchEvents = async () => {
+    try {
+        console.log("API: fetchEvents: Attempting to send request to", `${api.defaults.baseURL}/api/events`);
+        const response = await api.get('/api/events', {
+            headers: getAuthHeaders(),
+        });
+
+        const actualServerData = response.data;
+        console.log("API: fetchEvents: Received data:", actualServerData);
+        if (Array.isArray(actualServerData)) {
+            console.log("API: fetchEvents: Fetched successfully. Count:", actualServerData.length);
+            return actualServerData;
+        } else if (actualServerData && Array.isArray(actualServerData.events)) {
+            console.warn("API: fetchEvents: Data is an object with 'events' array. Extracting property.");
+            return actualServerData.events;
+        }
+
+        return []; 
+        
+    } catch (error) {
+        console.error("API: fetchEvents: Error fetching data:", error.response?.data || error.message);
+        throw error; 
+    }
+};
+
+
+//fech the attendance data API code
+export const uploadimageducoment = async (formData) => {
+  try {
+    const response = await api.put(
+      "/api/player/update-details",
+      formData, 
+      {
+        headers: {
+          ...getAuthHeaders(),
+        },
+        timeout: 10000,
+      }
+    );
+
+    console.log("API: Player details updated successfully:", response.data);
+    return response.data;
+  } catch (error) {
+    handleApiError("updateCustomer", error);
+    throw error;
+  }
+};
+
+//fetch the payement hostory details API code
+export const fetchPaymentsDetails = async (email) => {
+  try {
+    if (!email) throw new Error('Email is required.');
+
+    let token = readTokenFromStorage();
+    if (!token) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) token = readTokenFromStorage();
+    }
+    if (!token) throw new Error('Please log in again.');
+    const response = await api.get(`/api/payment-details/${encodeURIComponent(email.trim())}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = response.data?.data ?? response.data;
+    return Array.isArray(data) ? data : [];    
+  } catch (error) {
+    if (error.response?.status === 404) {
+      return [];
+    }    
+    console.error("Fetch Error:", error.message);
+    throw new Error(error.response?.data?.error || 'Failed to fetch payment records.');
+  }
+};
+
+
+// fetch the user profile details API code
+export const fetchUserProfile = async () => {
+  try {
+    const token = readTokenFromStorage();
+    if (!token) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) {
+      }
+    }
+    try {
+      const response = await api.get('/api/users-fetch', { withCredentials: true });
+      return response.data?.data ?? response.data;
+    } catch (innerErr) {
+      const status = innerErr?.response?.status;
+      if (status === 401 || status === 403) {
+        console.error("Auth error fetching user profile:", innerErr?.response?.data || innerErr.message || innerErr);
+        throw innerErr;
+      }
+
+      try {
+        const playersResp = await api.get('/api/players', { withCredentials: true });
+        const players = playersResp.data?.players ?? playersResp.data ?? [];
+        return players.map((p) => ({
+          tenant_id: p.tenant_id || p.tenantId || null,
+          full_name: p.full_name || p.name || p.guardian_name || p.login_email || p.email || "Unknown",
+          role: p.role || "parent",
+          guardian_email_id: p.guardian_email_id || p.login_email || p.email_id || p.email || null,
+          created_at: p.created_at || p.createdAt || null,
+        }));
+      } catch (fb) {
+        console.warn("Fallback /api/players also failed:", fb?.response?.data || fb.message || fb);
+        throw innerErr || fb;
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching user profile:", error?.response?.data || error.message || error);
+    throw new Error(error?.response?.data?.error || 'Failed to fetch user profile.');
+  }
+};
+
+
+//user id deactived API code
+export const deactivateUser = async (userId) => {
+  try {
+    const response = await api.put(
+      `/api/deactivate-user/${userId}`,
+      {}, // Empty body is correct for a PUT if the ID is in the URL
+      {
+        headers: {
+          ...getAuthHeaders(), // Ensure this returns { Authorization: "Bearer <token>" }
+          "Content-Type": "application/json"
+        },
+        withCredentials: true,
+      }
+    );
+    return response.data;
+  } catch (error) {
+    // Log the specific response from server to see why it is forbidden
+    console.error("Backend returned 403:", error.response?.data);
+    throw new Error(error.response?.data?.message || "Forbidden: You do not have permission.");
+  }
+};
+
+
+export const updateUserAcademy = async (settings) => {
+  try {
+    // Map Frontend camelCase to Backend snake_case
+    const payload = {
+      id: settings.id, // Include if updating
+      site_name: settings.siteName,
+      default_currency: settings.defaultCurrency,
+      founding_date: settings.foundingDate,
+      active_since: settings.activeSince,
+      validity: settings.validity,
+      address: settings.address,
+      notifications_enabled: settings.notificationsEnabled,
+      auto_backup: settings.autoBackup,
+      is_active: true // Defaulting to true
+    };
+
+    // Use the configured `api` instance (has baseURL + auth interceptors)
+    const response = await api.post('/api/academy-settings', payload);
+    // Return response.data directly because your backend returns result.rows[0]
+    return response.data;
+  } catch (error) {
+    console.error("API Update Error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+///fetch the academy settings details API code
+export const fetchAcademySettings = async () => {
+  try {
+    const response = await api.get('/api/academy-settingsdata', { 
+      headers: getAuthHeaders(),
+      withCredentials: true,
+    });
+    return response.data?.data ?? response.data;
+  } catch (error) {
+    console.error("API Fetch Error:", error.response?.data || error.message);
+    throw error;
+  } 
 };

@@ -57,29 +57,30 @@ import {
 } from "../../api";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Updated with #1A9CFF for Training events
 const eventTypeColors = {
-  training: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  training: "bg-[#1A9CFF]/20 text-[#1A9CFF] border-[#1A9CFF]/30",
   match: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   meeting: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   tournament: "bg-purple-500/20 text-purple-400 border-purple-500/30",
 };
 
 const eventTypeBgColors = {
-  training: "border-l-blue-500",
+  training: "border-l-[#1A9CFF]",
   match: "border-l-emerald-500",
   meeting: "border-l-amber-500",
   tournament: "border-l-purple-500",
 };
 
 const eventTypeDotColors = {
-  training: "bg-blue-500",
+  training: "bg-[#1A9CFF]",
   match: "bg-emerald-500",
   meeting: "bg-amber-500",
   tournament: "bg-purple-500",
 };
 
 const eventTypeGlowColors = {
-  training: "shadow-blue-500/30",
+  training: "shadow-[#1A9CFF]/30",
   match: "shadow-emerald-500/30",
   meeting: "shadow-amber-500/30",
   tournament: "shadow-purple-500/30",
@@ -87,18 +88,8 @@ const eventTypeGlowColors = {
 
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const months = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
 ];
 
 export default function Schedule() {
@@ -115,7 +106,6 @@ export default function Schedule() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [upcomingsession, setUpcomingsession] = useState([]);
 
-  // Form states for add/edit
   const [formData, setFormData] = useState({
     title: "",
     type: "",
@@ -139,7 +129,6 @@ export default function Schedule() {
       description: "",
     });
   };
-
   const openEditDialog = (event) => {
     setSelectedEvent(event);
     setFormData({
@@ -160,21 +149,8 @@ export default function Schedule() {
     setIsDeleteDialogOpen(true);
   };
 
-  const loadEvents = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchEvents();
-      setEvents(data);
-    } catch (error) {
-      console.error("Failed to load events", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSchedule = async () => {
+   const fetchSchedule = async () => {
     if (!user?.tenant_id || !user?.id) return;
-
     try {
       setIsLoading(true);
       const data = await GetScheduleRecords(user.tenant_id, user.id);
@@ -184,7 +160,6 @@ export default function Schedule() {
         date: (event.event_date || "").split("T")[0],
         time: event.event_time,
       }));
-
       setEvents(mappedData);
     } catch (error) {
       toast.error("Could not load schedule");
@@ -201,7 +176,6 @@ export default function Schedule() {
     const getSessions = async () => {
       const coachId = user?.id;
       if (!coachId) return;
-
       try {
         setLoading(true);
         const data = await fetchSessionData(coachId);
@@ -215,7 +189,6 @@ export default function Schedule() {
               type: session.group_category || "Default",
             }))
           : [];
-
         setUpcomingsession(formattedData);
       } catch (error) {
         console.error("Failed to fetch sessions:", error);
@@ -223,16 +196,15 @@ export default function Schedule() {
         setLoading(false);
       }
     };
-
     getSessions();
   }, [user?.id]);
 
-  const handleAddEvent = async () => {
+
+ const handleAddEvent = async () => {
     if (!formData.title || !formData.type || !formData.date || !formData.time) {
       toast.error("Please fill in all required fields");
       return;
     }
-
     try {
       const eventPayload = {
         tenant_id: user?.tenant_id || 1,
@@ -245,62 +217,23 @@ export default function Schedule() {
         team: formData.team || "All Teams",
         description: formData.description,
       };
-
       const savedEvent = await addScheduleEvent(eventPayload);
       setEvents((prevEvents) => [...prevEvents, savedEvent]);
-      toast.success("Event added successfully to database");
+      toast.success("Event added successfully");
       setIsAddDialogOpen(false);
       resetForm();
-      loadEvents();
     } catch (error) {
-      console.error("Failed to add event:", error);
-      toast.error(error.message || "Failed to save event. Please try again.");
+      toast.error(error.message || "Failed to save event");
     }
-    setTimeout(() => {
-      window.location.reload(true);
-    }, 20000);
   };
 
-  const handleEditEvent = async () => {
-    if (
-      !selectedEvent ||
-      !formData.title ||
-      !formData.type ||
-      !formData.date ||
-      !formData.time
-    ) {
+
+ const handleEditEvent = async () => {
+    if (!selectedEvent || !formData.title || !formData.type || !formData.date || !formData.time) {
       toast.error("Please fill in all required fields");
       return;
     }
-
     try {
-      const storedUser = (() => {
-        try {
-          return JSON.parse(localStorage.getItem("user") || "null");
-        } catch (e) {
-          return null;
-        }
-      })();
-
-      const tenantId =
-        user?.tenant_id ||
-        storedUser?.tenant_id ||
-        storedUser?.id ||
-        user?.id ||
-        null;
-
-      if (!tenantId) {
-        toast.error(
-          "Cannot update event: missing tenant information. Please sign out and sign in again."
-        );
-        return;
-      }
-
-      if (!selectedEvent || !selectedEvent.id) {
-        toast.error("Cannot update event: invalid event selected.");
-        return;
-      }
-
       const updatePayload = {
         title: formData.title,
         event_type: formData.type,
@@ -310,90 +243,46 @@ export default function Schedule() {
         duration: formData.duration || "1h",
         location: formData.location || "TBD",
         description: formData.description,
-        tenant_id: tenantId,
+        tenant_id: user?.tenant_id || 1,
       };
-
       await updateScheduleEvent(selectedEvent.id, updatePayload);
       await fetchSchedule();
       toast.success("Event updated successfully");
       setIsEditDialogOpen(false);
-      setSelectedEvent(null);
       resetForm();
     } catch (error) {
-      console.error("Update failed:", error);
       toast.error(error.message || "Failed to update event");
     }
-    setTimeout(() => {
-      window.location.reload(true);
-    }, 20000);
   };
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-
   const firstDayOfMonth = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
   const prevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
   };
-
   const nextMonth = () => {
     setCurrentDate(new Date(year, month + 1, 1));
   };
-
   const getEventsForDate = (date) => {
     return events.filter((event) => event.date === date);
   };
-
   const formatDate = (day) => {
-    return `${year}-${String(month + 1).padStart(2, "0")}-${String(
-      day
-    ).padStart(2, "0")}`;
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   };
 
   const handleDeleteEvent = async () => {
-    if (!selectedEvent) {
-      toast.error("No event selected to delete.");
-      return;
-    }
-
-    const storedUser = (() => {
-      try {
-        return JSON.parse(localStorage.getItem("user") || "null");
-      } catch (e) {
-        return null;
-      }
-    })();
-
-    const tenantId =
-      user?.tenant_id ||
-      storedUser?.tenant_id ||
-      storedUser?.id ||
-      user?.id ||
-      null;
-
-    if (!tenantId) {
-      toast.error(
-        "Cannot delete event: missing tenant information. Please sign out and sign in again."
-      );
-      return;
-    }
-
+    if (!selectedEvent) return;
     try {
-      await deleteScheduleEvent(selectedEvent.id, tenantId);
+      await deleteScheduleEvent(selectedEvent.id, user?.tenant_id || 1);
       await fetchSchedule();
       toast.success("Event deleted successfully");
       setIsDeleteDialogOpen(false);
-      // window.location.reload(true);
       setSelectedEvent(null);
     } catch (error) {
-      console.error("Delete failed:", error);
       toast.error(error.message || "Failed to delete event");
     }
-    setTimeout(() => {
-      window.location.reload(true);
-    }, 20000);
   };
 
   const upcomingEvents = events
@@ -410,8 +299,8 @@ export default function Schedule() {
   }
 
   return (
-    <div className="space-y-5">
       <div className="p-6 space-y-6 animate-fade-in">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Schedule</h1>
@@ -446,30 +335,21 @@ export default function Schedule() {
               <DialogContent className="bg-card border-border">
                 <DialogHeader>
                   <DialogTitle>Add New Event</DialogTitle>
-                  <DialogDescription>
-                    Create a new event for your schedule.
-                  </DialogDescription>
+                  <DialogDescription>Create a new event for your schedule.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>Event Title *</Label>
-                    <Input
-                      placeholder="Enter event title"
+                    <Input 
+                      placeholder="Enter event title" 
                       value={formData.title}
-                      onChange={(e) =>
-                        setFormData({ ...formData, title: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Event Type *</Label>
-                      <Select
-                        value={formData.type}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, type: value })
-                        }
-                      >
+                      <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
@@ -483,12 +363,7 @@ export default function Schedule() {
                     </div>
                     <div className="space-y-2">
                       <Label>Team</Label>
-                      <Select
-                        value={formData.team}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, team: value })
-                        }
-                      >
+                      <Select value={formData.team} onValueChange={(value) => setFormData({ ...formData, team: value })}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select team" />
                         </SelectTrigger>
@@ -504,56 +379,43 @@ export default function Schedule() {
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>Date *</Label>
-                      <Input
-                        type="date"
+                      <Input 
+                        type="date" 
                         value={formData.date}
-                        onChange={(e) =>
-                          setFormData({ ...formData, date: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Time *</Label>
-                      <Input
-                        type="time"
+                      <Input 
+                        type="time" 
                         value={formData.time}
-                        onChange={(e) =>
-                          setFormData({ ...formData, time: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, time: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Duration</Label>
-                      <Input
-                        placeholder="e.g., 2h"
+                      <Input 
+                        placeholder="e.g., 2h" 
                         value={formData.duration}
-                        onChange={(e) =>
-                          setFormData({ ...formData, duration: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Location</Label>
-                    <Input
-                      placeholder="Enter location"
+                    <Input 
+                      placeholder="Enter location" 
                       value={formData.location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, location: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Description (Optional)</Label>
-                    <Textarea
-                      placeholder="Enter event description"
+                    <Textarea 
+                      placeholder="Enter event description" 
                       value={formData.description}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          description: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     />
                   </div>
                   <DialogFooter>
@@ -566,46 +428,40 @@ export default function Schedule() {
                     >
                       Cancel
                     </Button>
-                    <Button onClick={handleAddEvent}>Add Event</Button>
+                    <Button onClick={handleAddEvent}>
+                      Add Event
+                    </Button>
                   </DialogFooter>
                 </div>
               </DialogContent>
             </Dialog>
-            <Dialog
-              open={isEditDialogOpen}
-              onOpenChange={(open) => {
-                setIsEditDialogOpen(open);
-                if (!open) {
-                  setSelectedEvent(null);
-                  resetForm();
-                }
-              }}
-            >
+
+            {/* Edit Event Dialog */}
+            <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+              setIsEditDialogOpen(open);
+              if (!open) {
+                setSelectedEvent(null);
+                resetForm();
+              }
+            }}>
               <DialogContent className="bg-card border-border">
                 <DialogHeader>
                   <DialogTitle>Edit Event</DialogTitle>
-                  <DialogDescription>
-                    Update the event details.
-                  </DialogDescription>
+                  <DialogDescription>Update the event details.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>Event Title *</Label>
-                    <Input
-                      placeholder="Enter event title"
+                    <Input 
+                      placeholder="Enter event title" 
                       value={formData.title}
-                      onChange={(e) =>
-                        setFormData({ ...formData, title: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Event Type *</Label>
-                      <Select
-                        value={formData.type}
-                        onValueChange={(value) => setFormData({ ...formData })}
-                      >
+                      <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData })}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
@@ -619,12 +475,7 @@ export default function Schedule() {
                     </div>
                     <div className="space-y-2">
                       <Label>Team</Label>
-                      <Select
-                        value={formData.team}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, team: value })
-                        }
-                      >
+                      <Select value={formData.team} onValueChange={(value) => setFormData({ ...formData, team: value })}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select team" />
                         </SelectTrigger>
@@ -640,56 +491,43 @@ export default function Schedule() {
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>Date *</Label>
-                      <Input
-                        type="date"
+                      <Input 
+                        type="date" 
                         value={formData.date}
-                        onChange={(e) =>
-                          setFormData({ ...formData, date: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Time *</Label>
-                      <Input
-                        type="time"
+                      <Input 
+                        type="time" 
                         value={formData.time}
-                        onChange={(e) =>
-                          setFormData({ ...formData, time: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, time: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Duration</Label>
-                      <Input
-                        placeholder="e.g., 2h"
+                      <Input 
+                        placeholder="e.g., 2h" 
                         value={formData.duration}
-                        onChange={(e) =>
-                          setFormData({ ...formData, duration: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Location</Label>
-                    <Input
-                      placeholder="Enter location"
+                    <Input 
+                      placeholder="Enter location" 
                       value={formData.location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, location: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Description (Optional)</Label>
-                    <Textarea
-                      placeholder="Enter event description"
+                    <Textarea 
+                      placeholder="Enter event description" 
                       value={formData.description}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          description: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     />
                   </div>
                   <DialogFooter>
@@ -703,32 +541,26 @@ export default function Schedule() {
                     >
                       Cancel
                     </Button>
-                    <Button onClick={handleEditEvent}>Save Changes</Button>
+                    <Button onClick={handleEditEvent}>
+                      Save Changes
+                    </Button>
                   </DialogFooter>
                 </div>
               </DialogContent>
             </Dialog>
 
-            <AlertDialog
-              open={isDeleteDialogOpen}
-              onOpenChange={setIsDeleteDialogOpen}
-            >
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Event</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Are you sure you want to delete "{selectedEvent?.title}"?
-                    This action cannot be undone.
+                    Are you sure you want to delete "{selectedEvent?.title}"? This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => setSelectedEvent(null)}>
-                    Cancel
-                  </AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDeleteEvent}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
+                  <AlertDialogCancel onClick={() => setSelectedEvent(null)}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                     Delete
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -737,15 +569,11 @@ export default function Schedule() {
           </div>
         </div>
 
+        {/* Event Type Legend */}
         <div className="flex flex-wrap gap-4 p-3 bg-card rounded-lg border border-border">
           {Object.entries(eventTypeDotColors).map(([type, color]) => (
-            <div
-              key={type}
-              className="flex items-center gap-2 group cursor-pointer"
-            >
-              <div
-                className={`w-3 h-3 rounded-full ${color} shadow-lg ${eventTypeGlowColors} group-hover:scale-125 transition-transform`}
-              />
+            <div key={type} className="flex items-center gap-2 group cursor-pointer">
+              <div className={`w-3 h-3 rounded-full ${color} shadow-lg ${eventTypeGlowColors} group-hover:scale-125 transition-transform`} />
               <span className="text-sm text-muted-foreground capitalize group-hover:text-foreground transition-colors">
                 {type}
               </span>
@@ -754,9 +582,11 @@ export default function Schedule() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Calendar / List View */}
           <div className="lg:col-span-2">
             {viewMode === "calendar" ? (
               <div className="bg-card rounded-xl border border-border p-4">
+                {/* Calendar Header */}
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-foreground">
                     {months[month]} {year}
@@ -771,16 +601,15 @@ export default function Schedule() {
                   </div>
                 </div>
 
+                {/* Days Header */}
                 <div className="grid grid-cols-7 gap-1 mb-2">
                   {daysOfWeek.map((day, idx) => (
                     <div
                       key={day}
                       className={`text-center text-sm font-semibold py-2 rounded-md ${
-                        idx === 0
-                          ? "text-red-400 bg-red-500/10"
-                          : idx === 6
-                          ? "text-orange-400 bg-orange-500/10"
-                          : "text-muted-foreground"
+                        idx === 0 ? "text-red-400 bg-red-500/10" : 
+                        idx === 6 ? "text-orange-400 bg-orange-500/10" : 
+                        "text-muted-foreground"
                       }`}
                     >
                       {day}
@@ -788,18 +617,21 @@ export default function Schedule() {
                   ))}
                 </div>
 
+                {/* Calendar Grid */}
                 <div className="grid grid-cols-7 gap-1">
                   {calendarDays.map((day, index) => {
                     const dateStr = day ? formatDate(day) : "";
                     const dayEvents = day ? getEventsForDate(dateStr) : [];
                     const isToday =
-                      day && dateStr === new Date().toISOString().split("T")[0];
+                      day &&
+                      dateStr ===
+                        new Date().toISOString().split("T")[0];
                     const isSelected = dateStr === selectedDate;
                     const isWeekend = index % 7 === 0 || index % 7 === 6;
                     const hasEvents = dayEvents.length > 0;
 
-                    const dominantType =
-                      dayEvents.length > 0 ? dayEvents[0].type : null;
+                    // Get dominant event type for background glow
+                    const dominantType = dayEvents.length > 0 ? dayEvents[0].type : null;
 
                     return (
                       <div
@@ -809,68 +641,56 @@ export default function Schedule() {
                             ? isSelected
                               ? "border-primary bg-primary/15 shadow-lg shadow-primary/20"
                               : hasEvents
-                              ? `border-border hover:border-primary/50 ${
-                                  dominantType
-                                    ? `bg-gradient-to-br from-transparent to-${eventTypeDotColors[
-                                        dominantType
-                                      ].replace("bg-", "")}/5`
-                                    : ""
-                                }`
-                              : isWeekend
-                              ? "border-border/50 bg-muted/30 hover:border-primary/50"
-                              : "border-border hover:border-primary/50 hover:bg-muted/20"
+                                ? `border-border hover:border-primary/50 ${dominantType ? `bg-gradient-to-br from-transparent to-${eventTypeDotColors[dominantType].replace('bg-', '')}/5` : ''}`
+                                : isWeekend
+                                  ? "border-border/50 bg-muted/30 hover:border-primary/50"
+                                  : "border-border hover:border-primary/50 hover:bg-muted/20"
                             : "border-transparent"
                         }`}
                         onClick={() => day && setSelectedDate(dateStr)}
                       >
                         {day && (
                           <>
+                            {/* Background glow for event days */}
                             {hasEvents && (
-                              <div
-                                className={`absolute inset-0 opacity-10 ${eventTypeDotColors}`}
-                                style={{ filter: "blur(20px)" }}
-                              />
+                              <div className={`absolute inset-0 opacity-10 ${eventTypeDotColors}`} 
+                                   style={{ filter: 'blur(20px)' }} />
                             )}
-
+                            
                             <div className="relative z-10">
                               <div
                                 className={`text-sm font-bold mb-1.5 w-7 h-7 flex items-center justify-center rounded-full transition-all ${
                                   isToday
                                     ? "bg-primary text-primary-foreground shadow-lg shadow-primary/40 animate-pulse"
                                     : isWeekend
-                                    ? "text-muted-foreground"
-                                    : "text-foreground"
+                                      ? "text-muted-foreground"
+                                      : "text-foreground"
                                 }`}
                               >
                                 {day}
                               </div>
-
+                              
+                              {/* Event dots indicator */}
                               {dayEvents.length > 0 && (
                                 <div className="flex gap-0.5 mb-1 flex-wrap">
                                   {dayEvents.slice(0, 4).map((event) => (
                                     <div
                                       key={event.id}
-                                      className={`w-2 h-2 rounded-full ${
-                                        eventTypeDotColors[event.type]
-                                      } shadow-sm`}
+                                      className={`w-2 h-2 rounded-full ${eventTypeDotColors[event.type]} shadow-sm`}
                                       title={event.title}
                                     />
                                   ))}
                                   {dayEvents.length > 4 && (
-                                    <span className="text-[10px] text-muted-foreground ml-0.5">
-                                      +{dayEvents.length - 4}
-                                    </span>
+                                    <span className="text-[10px] text-muted-foreground ml-0.5">+{dayEvents.length - 4}</span>
                                   )}
                                 </div>
                               )}
-
+                              
                               <div className="space-y-0.5">
                                 {dayEvents.slice(0, 2).map((event) => (
                                   <div
                                     key={event.id}
-                                    className={`text-[10px] px-1.5 py-0.5 rounded-md truncate font-medium border ${
-                                      eventTypeColors[event.type]
-                                    } backdrop-blur-sm`}
+                                    className={`text-[10px] px-1.5 py-0.5 rounded-md truncate font-medium border ${eventTypeColors[event.type]} backdrop-blur-sm`}
                                   >
                                     {event.title}
                                   </div>
@@ -902,9 +722,7 @@ export default function Schedule() {
                   .map((event) => (
                     <div
                       key={event.id}
-                      className={`p-4 rounded-lg border border-border border-l-4 ${
-                        eventTypeBgColors[event.type]
-                      } hover:bg-muted/50 transition-colors`}
+                      className={`p-4 rounded-lg border border-border border-l-4 ${eventTypeBgColors[event.type]} hover:bg-muted/50 transition-colors`}
                     >
                       <div className="flex items-start justify-between">
                         <div>
@@ -919,8 +737,7 @@ export default function Schedule() {
                           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Clock className="w-3.5 h-3.5" />
-                              {event.date} at {event.event_time} (
-                              {event.duration})
+                              {event.date} at {event.time} ({event.duration})
                             </span>
                             <span className="flex items-center gap-1">
                               <MapPin className="w-3.5 h-3.5" />
@@ -939,9 +756,7 @@ export default function Schedule() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => openEditDialog(event)}
-                            >
+                            <DropdownMenuItem onClick={() => openEditDialog(event)}>
                               <Edit className="w-4 h-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
@@ -961,6 +776,7 @@ export default function Schedule() {
             )}
           </div>
 
+          {/* Sidebar - Upcoming Events */}
           <div className="space-y-4">
             <div className="bg-card rounded-xl border border-border p-4">
               <h3 className="font-semibold text-foreground mb-4">
@@ -970,9 +786,7 @@ export default function Schedule() {
                 {upcomingEvents.map((event) => (
                   <div
                     key={event.id}
-                    className={`p-3 rounded-lg border border-border border-l-4 ${
-                      eventTypeBgColors[event.type]
-                    }`}
+                    className={`p-3 rounded-lg border border-border border-l-4 ${eventTypeBgColors[event.type]}`}
                   >
                     <h4 className="font-medium text-foreground text-sm">
                       {event.title}
@@ -990,6 +804,7 @@ export default function Schedule() {
               </div>
             </div>
 
+            {/* Selected Date Events */}
             {selectedDate && (
               <div className="bg-card rounded-xl border border-border p-4">
                 <h3 className="font-semibold text-foreground mb-4">
@@ -1000,9 +815,7 @@ export default function Schedule() {
                     getEventsForDate(selectedDate).map((event) => (
                       <div
                         key={event.id}
-                        className={`p-3 rounded-lg border border-border border-l-4 ${
-                          eventTypeBgColors[event.type]
-                        }`}
+                        className={`p-3 rounded-lg border border-border border-l-4 ${eventTypeBgColors[event.type]}`}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <h4 className="font-medium text-foreground text-sm">
@@ -1032,46 +845,8 @@ export default function Schedule() {
                 </div>
               </div>
             )}
-            <div className="bg-card rounded-xl border border-border p-4">
-              <h3 className="font-semibold text-foreground mb-4">
-                Schedule coach training sessions
-              </h3>
-
-              <div className="space-y-3">
-                {upcomingsession.length > 0 ? (
-                  upcomingsession.map((event) => (
-                    <div
-                      key={event.id}
-                      className={`p-3 rounded-lg border border-border border-l-4 ${
-                        eventTypeBgColors[event.type] ||
-                        eventTypeBgColors["Default"]
-                      }`}
-                    >
-                      <h4 className="font-medium text-foreground text-sm">
-                        {event.title}
-                      </h4>
-
-                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        {event.date} at {event.time}
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                        <MapPin className="w-3 h-3" />
-                        {event.location}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-muted-foreground italic text-center py-4">
-                    No sessions scheduled.
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         </div>
       </div>
-    </div>
   );
 }
